@@ -1,29 +1,36 @@
 {
   "expo": {
-    "name": "eCards2",
-    "slug": "eCards2",
+    "name": "eCards",
+    "slug": "eCards",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/ecardslogo.jpg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/ecardslogo.jpg",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mashikuallen.eCards2"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/ecardslogo.jpg",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.mashikuallen.eCards2"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/ecardslogo.jpg"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "cf3759ae-f8ce-41e7-a9d9-4cb1367c6854"
+      }
     }
   }
 }
