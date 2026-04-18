@@ -3,10 +3,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
-  ScrollView
+  ScrollView,
+  View,
+  Keyboard,
+  ToastAndroid
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Text,
   TextInput,
@@ -21,6 +24,7 @@ import {
 import axios from 'axios';
 import Toast from 'react-native-toast-message';
 import config from './config';
+import api from '../utils/api';
 
 const ForgotPasswordScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
@@ -50,24 +54,59 @@ const ForgotPasswordScreen = ({ navigation }) => {
     }
 
     try {
+      // Dismiss keyboard before showing loading
+      Keyboard.dismiss();
+      
       setLoading(true);
       setErrors({});
       
-      const response = await axios.post(`${config.BASE_URL}/api/request-reset`, {
+      const response = await api.post(`/api/request-reset`, {
         email: email.toLowerCase().trim(),
       });
 
-      if (response.data.success) {
+     const responsemessage=response.data?.message || 'Password reset link sent to your email';
         setLinkSent(true);
-        Toast.show({
+        if(Platform.OS==='android'){
+          ToastAndroid.show(responsemessage,ToastAndroid.LONG)
+        }
+        else{
+Toast.show({
           type: 'success',
-          text1: 'Password reset link sent to your email',
+          text1:'Success',
+          text2: 'Password reset link sent to your email',
         });
-      } else {
-        setErrors({ submit: response.data.message || 'Failed to send reset link' });
-      }
+        }
+        
+      
     } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Failed to send reset link';
+      //const errorMessage = error.response?.data?.message || 'Failed to send reset link';
+      let errorMessage = 'Failed to send reste link. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to send reste link. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
       setErrors({ submit: errorMessage });
     } finally {
       setLoading(false);
@@ -88,9 +127,10 @@ const ForgotPasswordScreen = ({ navigation }) => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar 
         barStyle="dark-content" 
-        backgroundColor="#f8f9fa"
+        backgroundColor="#ffffff"
         translucent={false}
       />
+      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
@@ -103,6 +143,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
               size={24}
               onPress={handleBackToLogin}
               style={styles.backButton}
+              disabled={loading}
             />
             <Text variant="headlineSmall" style={styles.title}>
               Reset Password
@@ -117,7 +158,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                   <IconButton
                     icon="email"
                     size={40}
-                    iconColor="#3498db"
+                    iconColor="#555555"
                     style={styles.emailIcon}
                   />
                 </Surface>
@@ -138,6 +179,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                   autoComplete="email"
                   error={!!errors.email}
                   left={<TextInput.Icon icon="email-outline" />}
+                  disabled={loading}
                 />
                 <HelperText type="error" visible={!!errors.email}>
                   {errors.email}
@@ -150,10 +192,9 @@ const ForgotPasswordScreen = ({ navigation }) => {
                 <Button
                   mode="contained"
                   onPress={handleSendResetLink}
-                  loading={loading}
                   disabled={loading}
                   style={styles.primaryButton}
-                  icon="send"
+                  icon={loading ? () => <ActivityIndicator color="#ffffff" size={20} /> : "send"}
                   contentStyle={styles.buttonContent}
                 >
                   {loading ? 'Sending...' : 'Send Reset Link'}
@@ -164,6 +205,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                   onPress={handleBackToLogin}
                   style={styles.secondaryButton}
                   compact
+                  disabled={loading}
                 >
                   Back to Login
                 </Button>
@@ -194,7 +236,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
                 <Text variant="bodyMedium" style={styles.instructions}>
                   Please check your email and click on the link to reset your password. 
-                  The link will expire in 1 hour.
+                  The link will expire in 15 minutes.
                 </Text>
 
                 <Surface style={styles.notesContainer} elevation={1}>
@@ -212,7 +254,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                     style={styles.noteChip}
                     textStyle={styles.noteText}
                   >
-                    Reset link expires in 1 hour
+                    Reset link expires in 15 minutes
                   </Chip>
                 </Surface>
 
@@ -247,11 +289,11 @@ const ForgotPasswordScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
   scrollContent: {
     flexGrow: 1,
@@ -262,18 +304,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 40,
     marginTop: 0,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
   backButton: {
     marginRight: 8,
   },
   title: {
-    color: '#2c3e50',
+    color: '#333333',
     fontWeight: 'bold',
   },
   formContainer: {
     borderRadius: 16,
-    elevation: 4,
+    elevation: 2,
+    backgroundColor: '#ffffff',
   },
   cardContent: {
     paddingVertical: 20,
@@ -281,62 +324,63 @@ const styles = StyleSheet.create({
   iconContainer: {
     alignItems: 'center',
     marginBottom: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
   emailIcon: {
-    backgroundColor: '#f0f8ff',
+    backgroundColor: '#f5f5f5',
     width: 80,
     height: 80,
   },
   successIconContainer: {
     alignItems: 'center',
     marginBottom: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
   successCircle: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#27ae60',
+    backgroundColor: '#333333',
     justifyContent: 'center',
     alignItems: 'center',
   },
   subtitle: {
-    color: '#7f8c8d',
+    color: '#666666',
     textAlign: 'center',
     marginBottom: 30,
     lineHeight: 22,
   },
   successTitle: {
-    color: '#27ae60',
+    color: '#333333',
     textAlign: 'center',
     marginBottom: 16,
     fontWeight: 'bold',
   },
   successMessage: {
-    color: '#2c3e50',
+    color: '#333333',
     textAlign: 'center',
     marginBottom: 20,
     lineHeight: 24,
   },
   emailText: {
     fontWeight: 'bold',
-    color: '#3498db',
+    color: '#555555',
   },
   instructions: {
-    color: '#7f8c8d',
+    color: '#666666',
     textAlign: 'center',
     marginBottom: 30,
     lineHeight: 20,
   },
   input: {
     marginBottom: 8,
+    backgroundColor: '#ffffff',
   },
   notesContainer: {
     borderRadius: 12,
     padding: 16,
     marginBottom: 30,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f9f9f9',
     gap: 12,
   },
   noteChip: {
@@ -345,12 +389,13 @@ const styles = StyleSheet.create({
   },
   noteText: {
     fontSize: 14,
-    color: '#5a6c7d',
+    color: '#666666',
   },
   primaryButton: {
     borderRadius: 12,
     marginBottom: 12,
-    elevation: 4,
+    elevation: 2,
+    backgroundColor: '#000000',
   },
   buttonContent: {
     paddingVertical: 6,

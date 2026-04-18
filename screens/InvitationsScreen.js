@@ -5,9 +5,13 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
-  StatusBar
+  StatusBar,
+  ToastAndroid,
+  Platform,
+  StyleSheet,
+  Keyboard
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Text,
   Card,
@@ -24,9 +28,10 @@ import {
   IconButton,
   Surface
 } from 'react-native-paper';
-import {  useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
 import config from './config';
 import api from '../utils/api';
 
@@ -41,34 +46,38 @@ const SendInvitations = ({ navigation }) => {
   const [eventDetails, setEventDetails] = useState(null);
 
   const fetchEvents = async () => {
-      setLoadingEvents(true);
-      try {
-        const token = await AsyncStorage.getItem('authToken');
-        const response = await api.get(`${config.BASE_URL}/api/getallevents`, {
-          headers: { Authorization: `Bearer ${token}` }
+    setLoadingEvents(true);
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const response = await api.get(`${config.BASE_URL}/api/getallevents`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setEvents(response.data.events || []);
+    } catch (error) {
+      const errormessage = error.response?.data?.message || 'Failed to load events';
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(errormessage, ToastAndroid.LONG);
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errormessage
         });
-        setEvents(response.data.events || []);
-      } catch (error) {
-        console.error('Error fetching events:', error);
-        Alert.alert('Error', 'Failed to load events');
-      } finally {
-        setLoadingEvents(false);
       }
-    };
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
 
-  useEffect(() => {
-    
+  // useEffect(() => {
+  //   fetchEvents();
+  // }, []);
 
-    fetchEvents();
-  }, []);
-
-  //refresh upon screen focus
-    useFocusEffect(
-      React.useCallback(() => {
-        fetchEvents();
-      }, [])
-    );
-
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchEvents();
+    }, [])
+  );
 
   const sendInvitations = async () => {
     if (!selectedEvent) {
@@ -103,9 +112,37 @@ const SendInvitations = ({ navigation }) => {
       setEventDetails(selected);
       
     } catch (error) {
-      console.error('Error sending invitations:', error);
-      Alert.alert('Error', 'Failed to send invitations');
-    } finally {
+  let errorMessage = 'Something went wrong. Please try again.';
+
+  if (error.response) {
+    // Server responded with a status code
+   
+
+    errorMessage = error.response?.data?.message || 'Failed to send invitations';
+
+   
+
+  } else if (error.request) {
+    // Request made but no response
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    // Something else happened
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
+}
+finally {
       setSending(false);
       setTimeout(() => setSendProgress(0), 2000);
     }
@@ -137,36 +174,85 @@ const SendInvitations = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       
-      <ScrollView style={{ padding: 16 }}>
+      {/* Sending Overlay */}
+      {sending && (
+        <View style={styles.sendingOverlay}>
+          <View style={styles.sendingContainer}>
+            <ActivityIndicator 
+              animating={true} 
+              size="large" 
+              color="#ffffff"
+              style={styles.spinner}
+            />
+            <Text style={styles.sendingTitle}>Sending Invitations</Text>
+            <Text style={styles.sendingSubtitle}>
+              Please wait while we send SMS invitations to all guests...
+            </Text>
+            <View style={styles.progressContainer}>
+              <ProgressBar 
+                progress={sendProgress / 100} 
+                color="#ffffff" 
+                style={styles.progressBar}
+              />
+              <Text style={styles.progressText}>{sendProgress}% Complete</Text>
+            </View>
+          </View>
+        </View>
+      )}
+      
+      <ScrollView style={styles.container}>
         {/* Header */}
-        <View style={{ alignItems: 'center', marginBottom: 24 }}>
-          <Title>Send Invitations</Title>
-          <Subheading style={{ color: '#666' }}>
+        <Surface style={styles.headerContainer} elevation={0}>
+          <Title style={styles.headerTitle}>Send Invitations</Title>
+          <Subheading style={styles.headerSubtitle}>
             Send SMS invitations to event guests
           </Subheading>
-        </View>
+          <Button
+            mode="outlined"
+            icon="message-text-outline"
+            onPress={() => navigation.navigate('SendThankYouMessage')}
+            style={styles.thankYouNavButton}
+            contentStyle={styles.buttonContent}
+          >
+            Go to Thank You Screen
+          </Button>
+        </Surface>
 
         {/* Event Selection Card */}
-        <Card style={{ marginBottom: 16 }}>
+        <Card style={styles.card} mode="contained">
           <Card.Content>
-            <Title style={{ marginBottom: 16 }}>Select Event</Title>
+            <Title style={styles.cardTitle}>Select Event</Title>
             
             {loadingEvents ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
-                <ActivityIndicator size="small" color="#6200ee" />
-                <Text style={{ marginLeft: 12 }}>Loading events...</Text>
+              <View style={styles.loadingOverlay}>
+                <Surface style={styles.loadingContainer} elevation={0}>
+                  <ActivityIndicator 
+                    animating={true} 
+                    size="large" 
+                    color="#ffffff"
+                    style={styles.spinner}
+                  />
+                  <Text style={styles.loadingTitle}>Loading Events</Text>
+                  <Text style={styles.loadingSubtitle}>Fetching available events...</Text>
+                </Surface>
               </View>
             ) : (
               <View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.eventsScroll}>
+                  <Surface style={styles.eventsContainer} elevation={0}>
                     <Button
                       mode={selectedEvent === '' ? 'contained' : 'outlined'}
                       onPress={() => setSelectedEvent('')}
                       compact
+                      style={[
+                        styles.eventButton,
+                        selectedEvent === '' ? styles.eventButtonSelected : styles.eventButtonDefault
+                      ]}
+                      textColor={selectedEvent === '' ? '#ffffff' : '#333333'}
+                      disabled={sending}
                     >
                       None Selected
                     </Button>
@@ -177,21 +263,27 @@ const SendInvitations = ({ navigation }) => {
                         mode={selectedEvent === event.id ? 'contained' : 'outlined'}
                         onPress={() => setSelectedEvent(event.id)}
                         compact
+                        style={[
+                          styles.eventButton,
+                          selectedEvent === event.id ? styles.eventButtonSelected : styles.eventButtonDefault
+                        ]}
+                        textColor={selectedEvent === event.id ? '#ffffff' : '#333333'}
+                        disabled={sending}
                       >
-                        {event.eventName}
+                        {event?.eventName ?? 'Uknown Event'}
                       </Button>
                     ))}
-                  </View>
+                  </Surface>
                 </ScrollView>
                 
                 {selectedEvent && getAvailableEvents().find(e => e.id === selectedEvent) && (
-                  <Card style={{ marginTop: 16, backgroundColor: '#f0f4ff' }}>
+                  <Card style={styles.selectedEventCard} mode="contained">
                     <Card.Content>
-                      <Text variant="bodySmall" style={{ color: '#666' }}>Selected Event:</Text>
-                      <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
+                      <Text variant="bodySmall" style={styles.selectedEventLabel}>Selected Event:</Text>
+                      <Text variant="bodyLarge" style={styles.selectedEventName}>
                         {getAvailableEvents().find(e => e.id === selectedEvent)?.eventName}
                       </Text>
-                      <Text variant="bodySmall">
+                      <Text variant="bodySmall" style={styles.selectedEventDate}>
                         Date: {formatDate(getAvailableEvents().find(e => e.id === selectedEvent)?.eventDate)}
                       </Text>
                     </Card.Content>
@@ -203,10 +295,10 @@ const SendInvitations = ({ navigation }) => {
         </Card>
 
         {/* Send Button Card */}
-        <Card style={{ marginBottom: 16 }}>
+        <Card style={styles.card} mode="contained">
           <Card.Content>
-            <Title style={{ marginBottom: 8 }}>Send Invitations</Title>
-            <Text style={{ marginBottom: 16, color: '#666' }}>
+            <Title style={styles.cardTitle}>Send Invitations</Title>
+            <Text style={styles.cardDescription}>
               Send SMS invitations to all guests of the selected event
             </Text>
             
@@ -216,46 +308,40 @@ const SendInvitations = ({ navigation }) => {
               onPress={sendInvitations}
               disabled={sending || !selectedEvent}
               loading={sending}
-              style={{ marginBottom: 16 }}
+              style={styles.sendButton}
+              contentStyle={styles.buttonContent}
             >
               {sending ? 'Sending...' : 'Send Invitations'}
             </Button>
-
-            {sending && (
-              <View style={{ marginTop: 16 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text>Sending Progress</Text>
-                  <Text style={{ fontWeight: 'bold' }}>{sendProgress}%</Text>
-                </View>
-                <ProgressBar progress={sendProgress / 100} color="#6200ee" />
-                <Text style={{ marginTop: 8, fontSize: 12, color: '#666' }}>
-                  Sending invitations to all guests...
-                </Text>
-              </View>
-            )}
           </Card.Content>
         </Card>
 
         {/* Info Card */}
-        <Card>
+        <Card style={styles.card} mode="contained">
           <Card.Content>
-            <Title>Important Notes</Title>
+            <Title style={styles.cardTitle}>Important Notes</Title>
             <List.Item
               title="Event Selection"
               description="Only upcoming events with unsent invitations are shown"
-              left={props => <List.Icon {...props} icon="calendar-check" />}
+              left={props => <List.Icon {...props} icon="calendar-check" color="#666666" />}
+              titleStyle={styles.listTitle}
+              descriptionStyle={styles.listDescription}
             />
-            <Divider />
+            <Divider style={styles.divider} />
             <List.Item
               title="Guest Coverage"
               description="All guests with valid phone numbers will receive SMS"
-              left={props => <List.Icon {...props} icon="account-group" />}
+              left={props => <List.Icon {...props} icon="account-group" color="#666666" />}
+              titleStyle={styles.listTitle}
+              descriptionStyle={styles.listDescription}
             />
-            <Divider />
+            <Divider style={styles.divider} />
             <List.Item
               title="Reminders"
               description="Automatic reminders will be scheduled"
-              left={props => <List.Icon {...props} icon="bell" />}
+              left={props => <List.Icon {...props} icon="bell" color="#666666" />}
+              titleStyle={styles.listTitle}
+              descriptionStyle={styles.listDescription}
             />
           </Card.Content>
         </Card>
@@ -263,50 +349,50 @@ const SendInvitations = ({ navigation }) => {
 
       {/* Summary Dialog */}
       <Portal>
-        <Dialog visible={summaryModalVisible} onDismiss={() => setSummaryModalVisible(false)}>
-          <Dialog.Title>Invitations Sent Successfully!</Dialog.Title>
+        <Dialog visible={summaryModalVisible} onDismiss={() => setSummaryModalVisible(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Invitations Sent Successfully!</Dialog.Title>
           <Dialog.Content>
             {sendSummary && (
               <View>
                 {/* Summary Stats */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
-                  <View style={{ alignItems: 'center' }}>
-                    <Surface style={{ backgroundColor: '#e8f5e8', padding: 16, borderRadius: 50 }}>
-                      <Text style={{ fontWeight: 'bold', fontSize: 18, color: '#4caf50' }}>
+                <Surface style={styles.statsContainer} elevation={0}>
+                  <Surface style={styles.statItem} elevation={0}>
+                    <Surface style={[styles.statCircle, styles.sentStat]} elevation={2}>
+                      <Text style={styles.statNumber}>
                         {sendSummary.summary.sent}
                       </Text>
                     </Surface>
-                    <Text style={{ marginTop: 8 }}>Sent</Text>
-                  </View>
+                    <Text style={styles.statLabel}>Sent</Text>
+                  </Surface>
                   
-                  <View style={{ alignItems: 'center' }}>
-                    <Surface style={{ backgroundColor: '#fff3e0', padding: 16, borderRadius: 50 }}>
-                      <Text style={{ fontWeight: 'bold', fontSize: 18, color: '#ff9800' }}>
+                  <Surface style={styles.statItem} elevation={0}>
+                    <Surface style={[styles.statCircle, styles.skippedStat]} elevation={2}>
+                      <Text style={styles.statNumber}>
                         {sendSummary.summary.skipped}
                       </Text>
                     </Surface>
-                    <Text style={{ marginTop: 8 }}>Skipped</Text>
-                  </View>
+                    <Text style={styles.statLabel}>Skipped</Text>
+                  </Surface>
                   
-                  <View style={{ alignItems: 'center' }}>
-                    <Surface style={{ backgroundColor: '#e3f2fd', padding: 16, borderRadius: 50 }}>
-                      <Text style={{ fontWeight: 'bold', fontSize: 18, color: '#2196f3' }}>
+                  <Surface style={styles.statItem} elevation={0}>
+                    <Surface style={[styles.statCircle, styles.remindersStat]} elevation={2}>
+                      <Text style={styles.statNumber}>
                         {sendSummary.summary.remindersCreated}
                       </Text>
                     </Surface>
-                    <Text style={{ marginTop: 8 }}>Reminders</Text>
-                  </View>
-                </View>
+                    <Text style={styles.statLabel}>Reminders</Text>
+                  </Surface>
+                </Surface>
 
                 {/* Event Info */}
                 {eventDetails && (
-                  <Card style={{ marginBottom: 16 }}>
+                  <Card style={styles.eventInfoCard} mode="contained">
                     <Card.Content>
-                      <Text variant="bodySmall" style={{ color: '#666' }}>Event:</Text>
-                      <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
+                      <Text variant="bodySmall" style={styles.eventInfoLabel}>Event:</Text>
+                      <Text variant="bodyLarge" style={styles.eventInfoName}>
                         {eventDetails.eventName}
                       </Text>
-                      <Text variant="bodySmall">
+                      <Text variant="bodySmall" style={styles.eventInfoDate}>
                         {formatDate(eventDetails.eventDate)}
                       </Text>
                     </Card.Content>
@@ -315,55 +401,350 @@ const SendInvitations = ({ navigation }) => {
 
                 {/* Reminders */}
                 {sendSummary.reminders && sendSummary.reminders.length > 0 && (
-                  <View style={{ marginBottom: 16 }}>
-                    <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>Scheduled Reminders:</Text>
+                  <Surface style={styles.remindersContainer} elevation={0}>
+                    <Text style={styles.remindersTitle}>Scheduled Reminders:</Text>
                     {sendSummary.reminders.map((reminder, index) => (
                       <Chip
                         key={index}
                         icon="clock"
                         mode="outlined"
-                        style={{ marginBottom: 4 }}
+                        style={styles.reminderChip}
+                        textStyle={styles.reminderChipText}
                       >
                         Reminder {reminder.reminder_number}: {formatDate(reminder.scheduled_at)}
                       </Chip>
                     ))}
-                  </View>
+                  </Surface>
                 )}
 
                 {/* Details */}
-                <View style={{ backgroundColor: '#f5f5f5', padding: 12, borderRadius: 8 }}>
-                  <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>Summary Details:</Text>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text>Invitations Sent:</Text>
-                    <Text style={{ fontWeight: 'bold' }}>{sendSummary.summary.sent}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text>Invitations Skipped:</Text>
-                    <Text style={{ fontWeight: 'bold' }}>{sendSummary.summary.skipped}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text>Reminders Created:</Text>
-                    <Text style={{ fontWeight: 'bold' }}>{sendSummary.summary.remindersCreated}</Text>
-                  </View>
-                </View>
+                <Surface style={styles.detailsContainer} elevation={1}>
+                  <Text style={styles.detailsTitle}>Summary Details:</Text>
+                  <Surface style={styles.detailRow} elevation={0}>
+                    <Text style={styles.detailLabel}>Invitations Sent:</Text>
+                    <Text style={styles.detailValue}>{sendSummary.summary.sent}</Text>
+                  </Surface>
+                  <Divider style={styles.detailDivider} />
+                  <Surface style={styles.detailRow} elevation={0}>
+                    <Text style={styles.detailLabel}>Invitations Skipped:</Text>
+                    <Text style={styles.detailValue}>{sendSummary.summary.skipped}</Text>
+                  </Surface>
+                  <Divider style={styles.detailDivider} />
+                  <Surface style={styles.detailRow} elevation={0}>
+                    <Text style={styles.detailLabel}>Reminders Created:</Text>
+                    <Text style={styles.detailValue}>{sendSummary.summary.remindersCreated}</Text>
+                  </Surface>
+                </Surface>
               </View>
             )}
           </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setSummaryModalVisible(false)}>
+          <Dialog.Actions style={styles.dialogActions}>
+            <Button 
+              onPress={() => setSummaryModalVisible(false)}
+              textColor="#666666"
+            >
               Close
             </Button>
-            <Button mode="contained" onPress={() => {
-              setSummaryModalVisible(false);
-              navigation.navigate('Reports');
-            }}>
-              View Report
-            </Button>
+           
           </Dialog.Actions>
         </Dialog>
       </Portal>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  container: {
+    padding: 20,
+  },
+  headerContainer: {
+    alignItems: 'center',
+    marginBottom: 30,
+    backgroundColor: '#ffffff',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    color: '#666666',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  card: {
+    marginBottom: 20,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
+    minHeight: 150,
+  },
+  cardTitle: {
+    color: '#000000',
+    marginBottom: 16,
+    fontWeight: '600',
+  },
+  cardDescription: {
+    marginBottom: 16,
+    color: '#666666',
+  },
+  // Loading overlay for events
+  loadingOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderRadius: 12,
+    marginVertical: 8,
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+  },
+  // Sending overlay for invitations
+  sendingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+  },
+  sendingContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 300,
+    minHeight: 300,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  spinner: {
+    marginBottom: 24,
+  },
+  loadingTitle: {
+    color: '#ffffff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  loadingSubtitle: {
+    color: '#e0e0e0',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  sendingTitle: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  sendingSubtitle: {
+    color: '#e0e0e0',
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  progressContainer: {
+    width: '100%',
+    backgroundColor: 'transparent',
+  },
+  progressBar: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  progressText: {
+    color: '#ffffff',
+    marginTop: 8,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  eventsScroll: {
+    marginBottom: 8,
+  },
+  eventsContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: 'transparent',
+  },
+  eventButton: {
+    borderRadius: 8,
+  },
+  eventButtonSelected: {
+    backgroundColor: '#000000',
+  },
+  eventButtonDefault: {
+    borderColor: '#e0e0e0',
+  },
+  selectedEventCard: {
+    marginTop: 16,
+    borderRadius: 12,
+    backgroundColor: '#f9f9f9',
+  },
+  selectedEventLabel: {
+    color: '#666666',
+    marginBottom: 4,
+  },
+  selectedEventName: {
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  selectedEventDate: {
+    color: '#666666',
+  },
+  sendButton: {
+    borderRadius: 12,
+    backgroundColor: '#000000',
+    marginBottom: 16,
+  },
+  thankYouNavButton: {
+    marginTop: 16,
+    borderRadius: 12,
+    borderColor: '#000000',
+  },
+  buttonContent: {
+    paddingVertical: 6,
+  },
+  listTitle: {
+    color: '#333333',
+    fontWeight: '500',
+  },
+  listDescription: {
+    color: '#666666',
+  },
+  divider: {
+    backgroundColor: '#f0f0f0',
+    marginVertical: 4,
+  },
+  dialog: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+  },
+  dialogTitle: {
+    color: '#000000',
+    fontWeight: '600',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+    backgroundColor: 'transparent',
+  },
+  statItem: {
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  statCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sentStat: {
+    backgroundColor: '#f0f0f0',
+  },
+  skippedStat: {
+    backgroundColor: '#f5f5f5',
+  },
+  remindersStat: {
+    backgroundColor: '#f9f9f9',
+  },
+  statNumber: {
+    fontWeight: 'bold',
+    fontSize: 18,
+    color: '#000000',
+  },
+  statLabel: {
+    color: '#666666',
+    fontSize: 12,
+  },
+  eventInfoCard: {
+    marginBottom: 16,
+    borderRadius: 12,
+    backgroundColor: '#f9f9f9',
+  },
+  eventInfoLabel: {
+    color: '#666666',
+    marginBottom: 2,
+  },
+  eventInfoName: {
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  eventInfoDate: {
+    color: '#666666',
+  },
+  remindersContainer: {
+    marginBottom: 16,
+    backgroundColor: 'transparent',
+  },
+  remindersTitle: {
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#000000',
+  },
+  reminderChip: {
+    backgroundColor: 'transparent',
+    borderColor: '#e0e0e0',
+    marginBottom: 4,
+  },
+  reminderChipText: {
+    color: '#666666',
+    fontSize: 12,
+  },
+  detailsContainer: {
+    backgroundColor: '#f9f9f9',
+    padding: 16,
+    borderRadius: 12,
+  },
+  detailsTitle: {
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#000000',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    backgroundColor: 'transparent',
+  },
+  detailLabel: {
+    color: '#666666',
+  },
+  detailValue: {
+    fontWeight: 'bold',
+    color: '#000000',
+  },
+  detailDivider: {
+    backgroundColor: '#e0e0e0',
+    marginBottom: 8,
+  },
+  dialogActions: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  viewReportButton: {
+    backgroundColor: '#000000',
+  },
+});
 
 export default SendInvitations;

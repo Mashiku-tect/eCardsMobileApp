@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Platform,
   KeyboardAvoidingView,
@@ -10,6 +9,7 @@ import {
   View,
   ToastAndroid
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Text,
   TextInput,
@@ -48,6 +48,7 @@ const EditEvent = () => {
     startTime: new Date(),
     endTime: new Date(new Date().getHours() + 2),
     location: '',
+    locationUrl: '',
     description: '',
     category: 'personal',
     package: 'Basic',
@@ -66,6 +67,26 @@ const EditEvent = () => {
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [packageModalVisible, setPackageModalVisible] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Validation functions
+  const validateEventName = (text) => {
+    // Allow letters, spaces, and & symbol only
+    return /^[A-Za-z\s&]+$/.test(text.trim());
+  };
+
+  const validateLocation = (text) => {
+    // Allow letters, spaces, and comma symbol only
+    return /^[A-Za-z\s,]+$/.test(text.trim());
+  };
+
+  const validateDescription = (text) => {
+    // Allow letters, spaces, numbers, and & symbol only
+    return /^[A-Za-z0-9\s&]+$/.test(text.trim());
+  };
+
+  const validateLocationUrl = (text) => {
+    return /^https?:\/\/\S+$/i.test(text.trim());
+  };
 
   const categories = [
     { value: 'personal', label: 'Personal', icon: 'account' },
@@ -92,7 +113,6 @@ const EditEvent = () => {
       const token = await AsyncStorage.getItem('authToken');
       
       if (!token) {
-       
         await AsyncStorage.removeItem('authToken');
         navigation.navigate('Login');
         return;
@@ -128,6 +148,7 @@ const EditEvent = () => {
         startTime: new Date(new Date().setHours(parseInt(startHours), parseInt(startMinutes))) || new Date(),
         endTime: new Date(new Date().setHours(parseInt(endHours), parseInt(endMinutes))) || new Date(),
         location: event.location || '',
+        locationUrl: event.locationUrl || '',
         description: event.description || '',
         category: event.category || 'personal',
         package: event.packagename || 'Basic',
@@ -139,18 +160,34 @@ const EditEvent = () => {
         setExistingFile(response.data.fileName);
       }
     } catch (error) {
-      const errormessage = error.response?.data?.message || 'Failed to fetch event';
-      if(Platform.OS==='android'){
-        ToastAndroid.show(errormessage,ToastAndroid.LONG);
-      }
-      else{
-Toast.show({
-        type: 'error',
-        text1: errormessage
-      });
-      }
-      
-    } finally {
+  let errorMessage = 'Failed to fetch event. Please try again.';
+
+  if (error.response) {
+    
+
+     errorMessage = error.response?.data?.message || 'Failed to fetch event Please Try Again';
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
+}
+finally {
       setFetching(false);
     }
   };
@@ -164,6 +201,28 @@ Toast.show({
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
+  };
+
+  const handleNameChange = (text) => {
+    // Only allow letters, spaces, and & symbol
+    const filtered = text.replace(/[^A-Za-z\s&]/g, '');
+    handleChange('name', filtered);
+  };
+
+  const handleLocationChange = (text) => {
+    // Only allow letters, spaces, and comma
+    const filtered = text.replace(/[^A-Za-z\s,]/g, '');
+    handleChange('location', filtered);
+  };
+
+  const handleDescriptionChange = (text) => {
+    // Only allow letters, numbers, spaces, and & symbol
+    const filtered = text.replace(/[^A-Za-z0-9\s&]/g, '');
+    handleChange('description', filtered);
+  };
+
+  const handleLocationUrlChange = (text) => {
+    handleChange('locationUrl', text);
   };
 
   const handleStartDateChange = (event, selectedDate) => {
@@ -243,23 +302,60 @@ Toast.show({
   const validateForm = () => {
     const newErrors = {};
     
-    if (!formData.name) newErrors.name = 'Event name is required';
-    if (!formData.location) newErrors.location = 'Location is required';
-    if (!formData.description) newErrors.description = 'Description is required';
-    
+    // Event Name validation
+    if (!formData.name.trim()) {
+      newErrors.name = 'Event name is required';
+    } else if (!validateEventName(formData.name)) {
+      newErrors.name = 'Event name can only contain letters, spaces, and & symbol';
+    } else if (formData.name.trim().length < 3) {
+      newErrors.name = 'Event name must be at least 3 characters';
+    } else if (formData.name.trim().length > 100) {
+      newErrors.name = 'Event name must be less than 100 characters';
+    }
+
+    // Location validation
+    if (!formData.location.trim()) {
+      newErrors.location = 'Location is required';
+    } else if (!validateLocation(formData.location)) {
+      newErrors.location = 'Location can only contain letters, spaces, and comma';
+    } else if (formData.location.trim().length < 5) {
+      newErrors.location = 'Location must be at least 5 characters';
+    } else if (formData.location.trim().length > 200) {
+      newErrors.location = 'Location must be less than 200 characters';
+    }
+
+    if (formData.locationUrl.trim() && !validateLocationUrl(formData.locationUrl)) {
+      newErrors.locationUrl = 'Location URL must be a valid link starting with http:// or https://';
+    } else if (formData.locationUrl.trim().length > 500) {
+      newErrors.locationUrl = 'Location URL must be less than 500 characters';
+    }
+
+    // Description validation
+    if (!formData.description.trim()) {
+      newErrors.description = 'Description is required';
+    } else if (!validateDescription(formData.description)) {
+      newErrors.description = 'Description can only contain letters, numbers, spaces, and & symbol';
+    } else if (formData.description.trim().length < 10) {
+      newErrors.description = 'Description must be at least 10 characters';
+    } else if (formData.description.trim().length > 500) {
+      newErrors.description = 'Description must be less than 500 characters';
+    }
+
     setErrors(newErrors);
     
     if (Object.keys(newErrors).length > 0) {
-      if(Platform.OS==='android'){
-        ToastAndroid.show('Please fill in all required fields',ToastAndroid.LONG);
-      }
-      else{
-Toast.show({
-        type: 'error',
-        text1: 'Please fill in all required fields'
-      });
-      }
+      // Show only the first error for better user experience
+      const firstErrorKey = Object.keys(newErrors)[0];
+      const firstErrorMessage = newErrors[firstErrorKey];
       
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(firstErrorMessage, ToastAndroid.LONG);
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: firstErrorMessage
+        });
+      }
       return false;
     }
 
@@ -385,6 +481,7 @@ Toast.show({
           fileName: file.name
         }));
         setUploadStatus('success');
+        setErrors(prev => ({ ...prev, excelFile: '' }));
         if(Platform.OS==='android'){
        ToastAndroid.show('Excel file uploaded successfully!',ToastAndroid.LONG)
         }
@@ -426,13 +523,14 @@ ToastAndroid.show('Failed to pick document',ToastAndroid.LONG)
       }
 
       const data = new FormData();
-      data.append("name", formData.name);
+      data.append("name", formData.name.trim());
       data.append("date", formData.startDate.toISOString().split('T')[0]);
       data.append("endDate", formData.endDate.toISOString().split('T')[0]);
       data.append("time", formData.startTime.toTimeString().split(' ')[0]);
       data.append("endTime", formData.endTime.toTimeString().split(' ')[0]);
-      data.append("location", formData.location);
-      data.append("description", formData.description);
+      data.append("location", formData.location.trim());
+      data.append("locationUrl", formData.locationUrl.trim());
+      data.append("description", formData.description.trim());
       data.append("category", formData.category);
       data.append("package", formData.package);
 
@@ -449,12 +547,11 @@ ToastAndroid.show('Failed to pick document',ToastAndroid.LONG)
         return;
       }
       
-        data.append("excelFile", {
-          uri: formData.excelFile.uri,
-          type: formData.excelFile.mimeType || 'application/vnd.ms-excel',
-          name: formData.excelFile.name || 'guest_list.xlsx'
-        });
-      
+      data.append("excelFile", {
+        uri: formData.excelFile.uri,
+        type: formData.excelFile.mimeType || 'application/vnd.ms-excel',
+        name: formData.excelFile.name || 'guest_list.xlsx'
+      });
 
       const res = await api.put(
         `${config.BASE_URL}/api/events/update/${id}`,
@@ -467,17 +564,17 @@ ToastAndroid.show('Failed to pick document',ToastAndroid.LONG)
           timeout: 30000,
         }
       );
-  const responsemessage=res?.data?.message;
-  if(Platform.OS==='android'){
-ToastAndroid.show(responsemessage,ToastAndroid.LONG)
-  }
-  else{
-Toast.show({
-        type: 'success',
-        text1: responsemessage
-      });
-  }
       
+      const responsemessage = res?.data?.message;
+      if(Platform.OS==='android'){
+        ToastAndroid.show(responsemessage,ToastAndroid.LONG)
+      }
+      else{
+        Toast.show({
+          type: 'success',
+          text1: responsemessage
+        });
+      }
       
       setTimeout(() => {
         navigation.navigate('EventDetails', { eventId: id, eventName: formData.name });
@@ -494,13 +591,13 @@ Toast.show({
       }
       
       if(Platform.OS==='android'){
-ToastAndroid.show(errorMessage,ToastAndroid.LONG)
+        ToastAndroid.show(errorMessage,ToastAndroid.LONG)
       }
       else{
-Toast.show({
-        type: 'error',
-        text1: errorMessage
-      });
+        Toast.show({
+          type: 'error',
+          text1: errorMessage
+        });
       }
       
     } finally {
@@ -541,9 +638,11 @@ Toast.show({
     }
   };
 
-  const isMultiDayEvent = () => {
-    return !isSameDay(formData.startDate, formData.endDate);
-  };
+ const isMultiDayEvent = () => {
+  if (!formData?.startDate || !formData?.endDate) return false;
+  return !isSameDay(formData.startDate, formData.endDate);
+};
+
 
   const getSelectedCategory = () => {
     return categories.find(cat => cat.value === formData.category)?.label || 'Select Category';
@@ -558,11 +657,11 @@ Toast.show({
       <SafeAreaView style={styles.safeArea}>
         <StatusBar 
           barStyle="dark-content" 
-          backgroundColor="#F0F4F8"
+          backgroundColor="#ffffff"
           translucent={false}
         />
         <Surface style={styles.loadingContainer} elevation={0}>
-          <ActivityIndicator size="small" />
+          <ActivityIndicator size="small" color="#000000" />
           <Text variant="bodyLarge" style={styles.loadingText}>
             Loading event data...
           </Text>
@@ -575,7 +674,7 @@ Toast.show({
     <SafeAreaView style={styles.safeArea}>
       <StatusBar 
         barStyle="dark-content" 
-        backgroundColor="#F0F4F8"
+        backgroundColor="#ffffff"
         translucent={false}
       />
       
@@ -593,98 +692,136 @@ Toast.show({
               onDismiss={() => setCategoryModalVisible(false)}
               contentContainerStyle={styles.modalContainer}
             >
-              <Card>
-                <Card.Title 
-                  title="Select Category" 
-                  titleVariant="titleLarge"
-                  left={(props) => <IconButton {...props} icon="format-list-bulleted" />}
-                />
-                <Card.Content>
-                  {categories.map((category) => (
-                    <List.Item
-                      key={category.value}
-                      title={category.label}
-                      left={props => <List.Icon {...props} icon={category.icon} />}
-                      right={props => 
-                        formData.category === category.value ? 
-                        <List.Icon {...props} icon="check" color="#3B82F6" /> : null
-                      }
-                      onPress={() => {
-                        handleChange('category', category.value);
-                        setCategoryModalVisible(false);
-                      }}
-                      style={[
-                        styles.listItem,
-                        formData.category === category.value && styles.selectedListItem
-                      ]}
-                    />
-                  ))}
-                </Card.Content>
-                <Card.Actions>
-                  <Button onPress={() => setCategoryModalVisible(false)}>
-                    Cancel
-                  </Button>
-                </Card.Actions>
-              </Card>
+              <Card style={styles.modalCard}>
+  <Card.Title
+    title="Select Category"
+    titleVariant="titleLarge"
+    titleStyle={styles.modalTitle}
+    left={(props) => (
+      <IconButton {...props} icon="format-list-bulleted" iconColor="#666666" />
+    )}
+  />
+
+  <Card.Content>
+    {Array.isArray(categories) && categories.length > 0 ? (
+      categories.map((category) => {
+        if (!category?.value || !category?.label) return null;
+
+        return (
+          <List.Item
+            key={category.value}
+            title={category.label}
+            left={props => (
+              <List.Icon
+                {...props}
+                icon={category.icon ?? 'help-circle'}
+                color="#666666"
+              />
+            )}
+            right={props =>
+              formData?.category === category.value ? (
+                <List.Icon {...props} icon="check" color="#333333" />
+              ) : null
+            }
+            onPress={() => {
+              handleChange?.('category', category.value);
+              setCategoryModalVisible?.(false);
+            }}
+            style={[
+              styles.listItem,
+              formData?.category === category.value && styles.selectedListItem
+            ]}
+            titleStyle={styles.listItemTitle}
+          />
+        );
+      })
+    ) : (
+      <List.Item title="No categories available" />
+    )}
+  </Card.Content>
+
+  <Card.Actions>
+    <Button onPress={() => setCategoryModalVisible?.(false)} textColor="#666666">
+      Cancel
+    </Button>
+  </Card.Actions>
+</Card>
+
             </Modal>
 
             {/* Package Selection Modal */}
-            <Modal 
-              visible={packageModalVisible} 
-              onDismiss={() => setPackageModalVisible(false)}
-              contentContainerStyle={styles.modalContainer}
+           <Modal
+  visible={!!packageModalVisible}
+  onDismiss={() => setPackageModalVisible?.(false)}
+  contentContainerStyle={styles.modalContainer}
+>
+  <Card style={styles.modalCard}>
+    <Card.Title
+      title="Select Package"
+      titleVariant="titleLarge"
+      titleStyle={styles.modalTitle}
+      left={(props) => (
+        <IconButton {...props} icon="package-variant" iconColor="#666666" />
+      )}
+    />
+
+    <Card.Content>
+      {Array.isArray(packages) && packages.length > 0 ? (
+        packages.map((pkg) => {
+          if (!pkg?.value || !pkg?.label) return null;
+
+          const isSelected = formData?.package === pkg.value;
+
+          return (
+            <Card
+              key={pkg.value}
+              mode="outlined"
+              style={[
+                styles.packageCard,
+                isSelected && styles.selectedPackageCard
+              ]}
+              onPress={() => {
+                handleChange?.('package', pkg.value);
+                setPackageModalVisible?.(false);
+              }}
             >
-              <Card>
-                <Card.Title 
-                  title="Select Package" 
-                  titleVariant="titleLarge"
-                  left={(props) => <IconButton {...props} icon="package-variant" />}
-                />
-                <Card.Content>
-                  {packages.map((pkg) => (
-                    <Card 
-                      key={pkg.value} 
-                      mode="outlined" 
-                      style={[
-                        styles.packageCard,
-                        formData.package === pkg.value && styles.selectedPackageCard
-                      ]}
-                      onPress={() => {
-                        handleChange('package', pkg.value);
-                        setPackageModalVisible(false);
-                      }}
-                    >
-                      <Card.Content>
-                        <Surface style={styles.packageHeader} elevation={0}>
-                          <Text variant="titleMedium" style={styles.packageName}>
-                            {pkg.label}
-                          </Text>
-                          <Chip mode="outlined" compact>
-                            {pkg.price}
-                          </Chip>
-                        </Surface>
-                        <Text variant="bodyMedium" style={styles.packageDescription}>
-                          {pkg.description}
-                        </Text>
-                        {formData.package === pkg.value && (
-                          <Surface style={styles.selectedIndicator} elevation={0}>
-                            <List.Icon icon="check-circle" color="#10B981" />
-                            <Text variant="bodySmall" style={styles.selectedText}>
-                              Selected
-                            </Text>
-                          </Surface>
-                        )}
-                      </Card.Content>
-                    </Card>
-                  ))}
-                </Card.Content>
-                <Card.Actions>
-                  <Button onPress={() => setPackageModalVisible(false)}>
-                    Cancel
-                  </Button>
-                </Card.Actions>
-              </Card>
-            </Modal>
+              <Card.Content>
+                <Surface style={styles.packageHeader} elevation={0}>
+                  <Text variant="titleMedium" style={styles.packageName}>
+                    {pkg.label}
+                  </Text>
+                </Surface>
+
+                {isSelected && (
+                  <Surface style={styles.selectedIndicator} elevation={0}>
+                    <List.Icon icon="check-circle" color="#333333" />
+                    <Text variant="bodySmall" style={styles.selectedText}>
+                      Selected
+                    </Text>
+                  </Surface>
+                )}
+              </Card.Content>
+            </Card>
+          );
+        })
+      ) : (
+        <Text variant="bodyMedium" style={{ textAlign: 'center', marginVertical: 16 }}>
+          No packages available
+        </Text>
+      )}
+    </Card.Content>
+
+    <Card.Actions>
+      <Button
+        onPress={() => setPackageModalVisible?.(false)}
+        textColor="#666666"
+      >
+        Cancel
+      </Button>
+    </Card.Actions>
+  </Card>
+</Modal>
+
           </Portal>
 
           <ScrollView 
@@ -710,119 +847,136 @@ Toast.show({
                 <View style={styles.inputContainer}>
                   <TextInput
                     label="Event Name *"
-                    value={formData.name}
-                    onChangeText={(text) => handleChange('name', text)}
+                    value={formData?.name?? 'Uknown Event'}
+                    onChangeText={handleNameChange}
                     mode="outlined"
                     style={styles.input}
                     error={!!errors.name}
                     returnKeyType="next"
+                    placeholder="e.g., Company Meeting & Conference"
+                    maxLength={100}
                   />
                   <HelperText type="error" visible={!!errors.name}>
                     {errors.name}
                   </HelperText>
+                  <HelperText type="info" visible={!errors.name && formData.name.length > 0}>
+                    Allowed: Letters, spaces, and & symbol
+                  </HelperText>
                 </View>
 
                 {/* Start and End Date */}
-                <Surface style={styles.row} elevation={0}>
-                  <Surface style={styles.dateInput} elevation={0}>
-                    <Text variant="bodyMedium" style={styles.label}>
-                      Start Date *
-                    </Text>
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowStartDatePicker(true)}
-                      icon="calendar"
-                      style={styles.dateButton}
-                    >
-                      {formatDate(formData.startDate)}
-                    </Button>
-                    {showStartDatePicker && (
-                      <DateTimePicker
-                        value={formData.startDate}
-                        mode="date"
-                        display="default"
-                        onChange={handleStartDateChange}
-                        minimumDate={new Date()}
-                      />
-                    )}
-                  </Surface>
+               <Surface style={styles.row} elevation={0}>
+  <Surface style={styles.dateInput} elevation={0}>
+    <Text variant="bodyMedium" style={styles.label}>
+      Start Date *
+    </Text>
+    <Button
+      mode="outlined"
+      onPress={() => setShowStartDatePicker(true)}
+      icon="calendar"
+      style={styles.dateButton}
+      textColor="#333333"
+    >
+      {formatDate(formData?.startDate)}
+    </Button>
 
-                  <Surface style={styles.dateInput} elevation={0}>
-                    <Text variant="bodyMedium" style={styles.label}>
-                      End Date *
-                    </Text>
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowEndDatePicker(true)}
-                      icon="calendar"
-                      style={styles.dateButton}
-                    >
-                      {formatDate(formData.endDate)}
-                    </Button>
-                    {showEndDatePicker && (
-                      <DateTimePicker
-                        value={formData.endDate}
-                        mode="date"
-                        display="default"
-                        onChange={handleEndDateChange}
-                        minimumDate={formData.startDate}
-                      />
-                    )}
-                  </Surface>
-                </Surface>
+    {showStartDatePicker && (
+      <DateTimePicker
+        value={formData?.startDate ?? new Date()}
+        mode="date"
+        display="default"
+        onChange={handleStartDateChange}
+        minimumDate={new Date()}
+      />
+    )}
+  </Surface>
+
+  <Surface style={styles.dateInput} elevation={0}>
+    <Text variant="bodyMedium" style={styles.label}>
+      End Date *
+    </Text>
+    <Button
+      mode="outlined"
+      onPress={() => setShowEndDatePicker(true)}
+      icon="calendar"
+      style={styles.dateButton}
+      textColor="#333333"
+    >
+      {formatDate(formData?.endDate)}
+    </Button>
+
+    {showEndDatePicker && (
+      <DateTimePicker
+        value={formData?.endDate ?? formData?.startDate ?? new Date()}
+        mode="date"
+        display="default"
+        onChange={handleEndDateChange}
+        minimumDate={formData?.startDate ?? new Date()}
+      />
+    )}
+  </Surface>
+</Surface>
+
 
                 {/* Start and End Time */}
-                <Surface style={styles.row} elevation={0}>
-                  <Surface style={styles.dateInput} elevation={0}>
-                    <Text variant="bodyMedium" style={styles.label}>
-                      Start Time *
-                    </Text>
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowStartTimePicker(true)}
-                      icon="clock"
-                      style={styles.dateButton}
-                    >
-                      {formatTime(formData.startTime)}
-                    </Button>
-                    {showStartTimePicker && (
-                      <DateTimePicker
-                        value={formData.startTime}
-                        mode="time"
-                        display="default"
-                        onChange={handleStartTimeChange}
-                      />
-                    )}
-                  </Surface>
+               <Surface style={styles.row} elevation={0}>
+  {/* Start Time */}
+  <Surface style={styles.dateInput} elevation={0}>
+    <Text variant="bodyMedium" style={styles.label}>
+      Start Time *
+    </Text>
+    <Button
+      mode="outlined"
+      onPress={() => setShowStartTimePicker(true)}
+      icon="clock"
+      style={styles.dateButton}
+      textColor="#333333"
+    >
+      {formatTime(formData?.startTime)}
+    </Button>
+    {showStartTimePicker && (
+      <DateTimePicker
+        value={formData?.startTime ?? new Date()}
+        mode="time"
+        display="default"
+        onChange={handleStartTimeChange}
+      />
+    )}
+  </Surface>
 
-                  <Surface style={styles.dateInput} elevation={0}>
-                    <Text variant="bodyMedium" style={styles.label}>
-                      End Time *
-                    </Text>
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowEndTimePicker(true)}
-                      icon="clock"
-                      style={styles.dateButton}
-                    >
-                      {formatTime(formData.endTime)}
-                    </Button>
-                    {showEndTimePicker && (
-                      <DateTimePicker
-                        value={formData.endTime}
-                        mode="time"
-                        display="default"
-                        onChange={handleEndTimeChange}
-                      />
-                    )}
-                  </Surface>
-                </Surface>
+  {/* End Time */}
+  <Surface style={styles.dateInput} elevation={0}>
+    <Text variant="bodyMedium" style={styles.label}>
+      End Time *
+    </Text>
+    <Button
+      mode="outlined"
+      onPress={() => setShowEndTimePicker(true)}
+      icon="clock"
+      style={styles.dateButton}
+      textColor="#333333"
+    >
+      {formatTime(formData?.endTime)}
+    </Button>
+    {showEndTimePicker && (
+      <DateTimePicker
+        value={formData?.endTime ?? formData?.startTime ?? new Date()}
+        mode="time"
+        display="default"
+        onChange={handleEndTimeChange}
+      />
+    )}
+  </Surface>
+</Surface>
+
 
                 {/* Duration Display */}
                 <Surface style={styles.durationContainer} elevation={1}>
                   <Chip
                     icon={isMultiDayEvent() ? "calendar-range" : "calendar"}
                     mode="outlined"
+                    style={styles.durationChip}
+                    textStyle={styles.durationChipText}
                   >
                     {isMultiDayEvent() ? 'Multi-day Event' : 'Single-day Event'}
                   </Chip>
@@ -835,15 +989,43 @@ Toast.show({
                 <View style={styles.inputContainer}>
                   <TextInput
                     label="Location *"
-                    value={formData.location}
-                    onChangeText={(text) => handleChange('location', text)}
+                    value={formData?.location?? 'Tanzania'}
+                    onChangeText={handleLocationChange}
                     mode="outlined"
                     style={styles.input}
                     error={!!errors.location}
                     returnKeyType="next"
+                    placeholder="e.g., New York, USA or Main Conference Hall"
+                    maxLength={200}
                   />
                   <HelperText type="error" visible={!!errors.location}>
                     {errors.location}
+                  </HelperText>
+                  <HelperText type="info" visible={!errors.location && formData.location.length > 0}>
+                    Allowed: Letters, spaces, and comma
+                  </HelperText>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    label="Location URL (Google Maps Link)"
+                    value={formData?.locationUrl ?? ''}
+                    onChangeText={handleLocationUrlChange}
+                    mode="outlined"
+                    style={styles.input}
+                    error={!!errors.locationUrl}
+                    returnKeyType="next"
+                    placeholder="https://maps.google.com/..."
+                    keyboardType="url"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    maxLength={500}
+                  />
+                  <HelperText type="error" visible={!!errors.locationUrl}>
+                    {errors.locationUrl}
+                  </HelperText>
+                  <HelperText type="info" visible={!errors.locationUrl && formData.locationUrl.length > 0}>
+                    Paste the full Google Maps link for this event location
                   </HelperText>
                 </View>
 
@@ -859,6 +1041,7 @@ Toast.show({
                       icon="chevron-down"
                       style={styles.pickerButton}
                       contentStyle={styles.pickerButtonContent}
+                      textColor="#333333"
                     >
                       {getSelectedCategory()}
                     </Button>
@@ -874,6 +1057,7 @@ Toast.show({
                       icon="chevron-down"
                       style={styles.pickerButton}
                       contentStyle={styles.pickerButtonContent}
+                      textColor="#333333"
                     >
                       {getSelectedPackage()}
                     </Button>
@@ -883,7 +1067,7 @@ Toast.show({
                 {/* Excel File Upload */}
                 <Surface style={styles.uploadContainer} elevation={0}>
                   <Text variant="bodyMedium" style={styles.label}>
-                    Guest List (Excel File) {!existingFile && '*'}
+                    Guest List (Excel File) *
                   </Text>
                   <Button
                     mode="contained"
@@ -891,7 +1075,7 @@ Toast.show({
                     icon="file-upload"
                     style={styles.uploadButton}
                   >
-                    Upload Excel File
+                    {formData.fileName ? 'Change File' : 'Upload Excel File'}
                   </Button>
                   
                   {formData.fileName && (
@@ -899,17 +1083,14 @@ Toast.show({
                       styles.fileInfo, 
                       uploadStatus === 'success' ? styles.successFile : styles.defaultFile
                     ]} elevation={1}>
-                      <IconButton icon="file-document" size={20} iconColor={uploadStatus === 'success' ? '#10B981' : '#6B7280'} />
-                      <Surface style={styles.fileInfoContent} elevation={0}>
-                        <Text variant="bodyMedium" style={styles.fileName}>
-                          {formData.fileName}
-                        </Text>
-                        <Text variant="bodySmall" style={styles.fileStatus}>
-                          {uploadStatus === 'success' 
-                            ? 'File successfully uploaded. This will replace your existing guest list.'
-                            : 'Please upload an Excel file with your guest list.'}
-                        </Text>
-                      </Surface>
+                      <Text variant="bodyMedium" style={styles.fileName}>
+                        {formData?.fileName?? 'Excel File'}
+                      </Text>
+                      <Text variant="bodySmall" style={styles.fileStatus}>
+                        {uploadStatus === 'success' 
+                          ? 'File successfully uploaded. This will replace your existing guest list.'
+                          : 'Please upload an Excel file with your guest list.'}
+                      </Text>
                     </Surface>
                   )}
                   
@@ -918,14 +1099,18 @@ Toast.show({
                       Upload an Excel file (.xlsx, .xls) or CSV containing your guest list
                     </Text>
                   )}
+                  
+                  <HelperText type="error" visible={!!errors.excelFile}>
+                    {errors.excelFile}
+                  </HelperText>
                 </Surface>
 
                 {/* Description */}
                 <View style={styles.inputContainer}>
                   <TextInput
                     label="Description *"
-                    value={formData.description}
-                    onChangeText={(text) => handleChange('description', text)}
+                    value={formData?.description?? 'This is the event description'}
+                    onChangeText={handleDescriptionChange}
                     mode="outlined"
                     style={[styles.input, styles.textArea]}
                     multiline
@@ -933,9 +1118,14 @@ Toast.show({
                     error={!!errors.description}
                     blurOnSubmit={true}
                     returnKeyType="done"
+                    placeholder="Describe your event, agenda, and important details..."
+                    maxLength={500}
                   />
                   <HelperText type="error" visible={!!errors.description}>
                     {errors.description}
+                  </HelperText>
+                  <HelperText type="info" visible={!errors.description && formData.description.length > 0}>
+                    Allowed: Letters, numbers, spaces, and & symbol ({formData.description.length}/500)
                   </HelperText>
                 </View>
 
@@ -945,6 +1135,7 @@ Toast.show({
                     mode="outlined"
                     onPress={() => navigation.goBack()}
                     style={styles.cancelButton}
+                    textColor="#333333"
                   >
                     Cancel
                   </Button>
@@ -974,7 +1165,7 @@ Toast.show({
 const styles = {
   safeArea: {
     flex: 1,
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#ffffff',
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -983,43 +1174,50 @@ const styles = {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#ffffff',
   },
   loadingText: {
     marginTop: 12,
+    color: '#666666',
   },
   scrollView: {
     flex: 1,
   },
   scrollViewContent: {
     flexGrow: 1,
-    padding: 16,
+    padding: 20,
     paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 30,
     paddingTop: 8,
-    backgroundColor: 'transparent',
+    backgroundColor: '#ffffff',
   },
   title: {
-    color: '#1F2937',
+    color: '#000000',
     fontWeight: 'bold',
     marginBottom: 8,
     textAlign: 'center',
+    fontSize: 28,
   },
   subtitle: {
-    color: '#6B7280',
+    color: '#666666',
     textAlign: 'center',
+    fontSize: 16,
   },
   formCard: {
     marginBottom: 24,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
   },
   inputContainer: {
-    marginBottom: 8,
+    marginBottom: 16,
   },
   input: {
     marginBottom: 0,
+    backgroundColor: '#ffffff',
   },
   textArea: {
     height: 100,
@@ -1028,20 +1226,21 @@ const styles = {
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 20,
     backgroundColor: 'transparent',
+    gap: 16,
   },
   dateInput: {
     flex: 1,
-    marginHorizontal: 4,
     backgroundColor: 'transparent',
   },
   dateButton: {
     marginTop: 4,
+    borderColor: '#e0e0e0',
   },
   label: {
     marginBottom: 8,
-    color: '#374151',
+    color: '#000000',
     fontSize: 14,
     fontWeight: '500',
   },
@@ -1049,48 +1248,55 @@ const styles = {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    backgroundColor: '#F8FAFC',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    backgroundColor: '#f9f9f9',
+  },
+  durationChip: {
+    backgroundColor: 'transparent',
+    borderColor: '#e0e0e0',
+  },
+  durationChipText: {
+    color: '#666666',
   },
   durationValue: {
-    color: '#059669',
-    fontWeight: 'bold',
+    color: '#333333',
+    fontWeight: '600',
   },
   pickerContainer: {
     flex: 1,
-    marginHorizontal: 4,
     backgroundColor: 'transparent',
   },
   pickerButton: {
     marginTop: 4,
+    borderColor: '#e0e0e0',
   },
   pickerButtonContent: {
     justifyContent: 'space-between',
   },
   uploadContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
     backgroundColor: 'transparent',
   },
   uploadButton: {
     marginBottom: 12,
+    backgroundColor: '#000000',
+    borderRadius: 12,
   },
   fileInfo: {
-    flexDirection: 'row',
-    padding: 12,
-    borderRadius: 8,
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 8,
-    alignItems: 'flex-start',
   },
   existingFile: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#f5f5f5',
   },
   defaultFile: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#f9f9f9',
   },
   successFile: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#f5f5f5',
   },
   fileInfoContent: {
     flex: 1,
@@ -1099,53 +1305,70 @@ const styles = {
   },
   fileName: {
     fontWeight: 'bold',
-    marginBottom: 4,
-    color: '#374151',
+    marginBottom: 8,
+    color: '#000000',
   },
   fileStatus: {
-    color: '#6B7280',
+    color: '#666666',
   },
   uploadHint: {
-    color: '#6B7280',
+    color: '#666666',
     fontStyle: 'italic',
-    marginTop: 4,
+    marginTop: 8,
   },
   actions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: '#f0f0f0',
     paddingTop: 20,
     marginTop: 8,
     backgroundColor: 'transparent',
   },
   cancelButton: {
     flex: 1,
-    marginRight: 8,
+    marginRight: 12,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
   },
   submitButton: {
     flex: 1,
-    marginLeft: 8,
+    marginLeft: 12,
+    backgroundColor: '#000000',
+    borderRadius: 12,
   },
   // Modal Styles
   modalContainer: {
     padding: 20,
     margin: 20,
   },
+  modalCard: {
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+  },
+  modalTitle: {
+    color: '#000000',
+    fontWeight: '600',
+  },
   listItem: {
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderRadius: 8,
   },
   selectedListItem: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#f5f5f5',
+  },
+  listItemTitle: {
+    color: '#000000',
   },
   packageCard: {
-    marginBottom: 8,
-    borderColor: '#E5E7EB',
+    marginBottom: 12,
+    borderRadius: 12,
+    borderColor: '#f0f0f0',
+    backgroundColor: '#ffffff',
   },
   selectedPackageCard: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#EFF6FF',
+    borderColor: '#333333',
+    backgroundColor: '#f9f9f9',
   },
   packageHeader: {
     flexDirection: 'row',
@@ -1156,9 +1379,17 @@ const styles = {
   },
   packageName: {
     fontWeight: 'bold',
+    color: '#000000',
+  },
+  packagePriceChip: {
+    backgroundColor: 'transparent',
+    borderColor: '#e0e0e0',
+  },
+  packagePriceText: {
+    color: '#666666',
   },
   packageDescription: {
-    color: '#6B7280',
+    color: '#666666',
     marginBottom: 8,
   },
   selectedIndicator: {
@@ -1167,7 +1398,7 @@ const styles = {
     backgroundColor: 'transparent',
   },
   selectedText: {
-    color: '#10B981',
+    color: '#333333',
     marginLeft: 4,
     fontWeight: '500',
   },

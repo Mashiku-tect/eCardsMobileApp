@@ -5,10 +5,12 @@ import {
   RefreshControl,
   Dimensions,
   Platform,
-  SafeAreaView,
-  StatusBar
+  StatusBar,
+  ToastAndroid,
+  
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation,useFocusEffect } from '@react-navigation/native';
 import {
   Text,
   Card,
@@ -82,6 +84,7 @@ const Dashboard = () => {
     try {
       setError(null);
       const token = await AsyncStorage.getItem('authToken');
+     
 
       const statsResponse = await api.get(`${config.BASE_URL}/api/dashboard`, {
         headers: {
@@ -137,31 +140,75 @@ const Dashboard = () => {
         }));
       }
     } catch (error) {
-      let errormessage;
-      setError(error.response?.data?.message || 'Failed to load dashboard data');
-      errormessage = error.response?.data?.message || 'Failed to load dashboard data';
-      
-      if(error.response?.status === 403){
-        Toast.show({ 
-          type: 'error', 
-          text1: 'You do not have permissions to view the dashboard' 
+  let errorMessage = 'Failed To Load Dashboard Data';
+
+  if (axios.isAxiosError(error)) {
+    // 1️⃣ Backend responded with error
+    if (error.response) {
+      const status = error.response.status;
+      errorMessage =
+        error.response.data?.message || 'Failed To Load Dashboard Data';
+
+      if (status === 403) {
+        if(Platform.OS==='android'){
+          ToastAndroid.show(errorMessage,ToastAndroid.LONG)
+        }
+        else{
+ Toast.show({
+          type: 'error',
+          text1: 'You do not have permissions to view the dashboard',
         });
-      } else {
-        Toast.show({ 
-          type: 'error', 
-          text1: errormessage 
-        });
+        }
+        
+       
+        return;
       }
-    } finally {
+    }
+    // 2️⃣ No response from server (network error, server down)
+    else if (error.request) {
+      if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please try again.';
+      } else {
+        errorMessage = 'Unable to connect to the server. Check your internet connection.';
+      }
+    }
+    // 3️⃣ Axios configuration error
+    else {
+      errorMessage = error.message;
+    }
+  } else {
+    // Non-Axios error
+    errorMessage = 'Unexpected error occurred';
+  }
+
+  setError(errorMessage);
+  if(Platform.OS==='android'){
+    ToastAndroid.show(errorMessage,ToastAndroid.LONG)
+  }
+  else{
+Toast.show({
+    type: 'error',
+    text1: errorMessage,
+  });
+  }
+  
+} finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  // useEffect(() => {
+  //   fetchDashboardData();
+  // }, []);
 
+
+  //fetch data on screen focus
+  useFocusEffect(
+      React.useCallback(() => {
+        fetchDashboardData();
+      }, [])
+    );
   const onRefresh = () => {
     setRefreshing(true);
     fetchDashboardData();
@@ -193,19 +240,36 @@ const Dashboard = () => {
   };
 
   const getStatusColor = (status) => {
-    if (!status) return 'default';
+    if (!status) return '#666666';
     
     switch (status.toLowerCase()) {
       case 'upcoming':
-        return 'warning';
+        return '#F59E0B';
       case 'completed':
-        return 'success';
+        return '#10B981';
       case 'cancelled':
-        return 'error';
-      case 'Not Dealt':
-        return 'warning';
+        return '#EF4444';
+      case 'not dealt':
+        return '#F97316';
       default:
-        return 'default';
+        return '#666666';
+    }
+  };
+
+  const getStatusBackgroundColor = (status) => {
+    if (!status) return '#F5F5F5';
+    
+    switch (status.toLowerCase()) {
+      case 'upcoming':
+        return '#FFFBEB';
+      case 'completed':
+        return '#ECFDF5';
+      case 'cancelled':
+        return '#FEF2F2';
+      case 'not dealt':
+        return '#FFF7ED';
+      default:
+        return '#F5F5F5';
     }
   };
 
@@ -242,8 +306,13 @@ const Dashboard = () => {
               {value}
             </Text>
           </Surface>
-          <Surface style={[styles.statIcon, { backgroundColor: color + '20' }]}>
-            <IconButton icon={icon} size={20} iconColor={color} />
+          <Surface style={[styles.statIcon, { backgroundColor: getStatusBackgroundColor(title) }]}>
+            <IconButton 
+              icon={icon} 
+              size={20} 
+              iconColor={color} 
+              style={styles.statIconButton}
+            />
           </Surface>
         </Surface>
         <Text variant="bodySmall" style={styles.statSubtitle}>
@@ -258,11 +327,11 @@ const Dashboard = () => {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar 
           barStyle="dark-content" 
-          backgroundColor="#f8f9fa"
+          backgroundColor="#ffffff"
           translucent={false}
         />
         <Surface style={styles.centerContainer}>
-          <ActivityIndicator size="small" />
+          <ActivityIndicator size="small" color="#000000" />
           <Text variant="bodyLarge" style={styles.loadingText}>
             Loading dashboard data...
           </Text>
@@ -275,7 +344,7 @@ const Dashboard = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar 
         barStyle="dark-content" 
-        backgroundColor="#f8f9fa"
+        backgroundColor="#ffffff"
         translucent={false}
       />
       <ScrollView
@@ -294,7 +363,7 @@ const Dashboard = () => {
             </Text>
           </Surface>
 
-          {error && (
+          {/* {error && (
             <Card style={styles.errorCard} mode="contained">
               <Card.Content style={styles.errorContent}>
                 <IconButton icon="alert-circle" iconColor="#DC2626" size={20} />
@@ -303,7 +372,7 @@ const Dashboard = () => {
                 </Text>
               </Card.Content>
             </Card>
-          )}
+          )} */}
 
           {/* Stats Grid */}
           <ScrollView 
@@ -317,35 +386,35 @@ const Dashboard = () => {
                 value={(stats.totalEvents || 0).toString()}
                 subtitle="All events created"
                 icon="calendar"
-                color="#3B82F6"
+                color="#333333"
               />
               <StatCard
                 title="Upcoming Events"
                 value={(stats.activeEvents || 0).toString()}
                 subtitle="Scheduled for future/today"
                 icon="clock"
-                color="#F59E0B"
+                color="#333333"
               />
               <StatCard
                 title="Not Dealt"
                 value={(stats.notDealtEvents || 0).toString()}
                 subtitle="Past due, not completed"
                 icon="alert"
-                color="#F97316"
+                color="#333333"
               />
               <StatCard
                 title="Completion Rate"
                 value={`${stats.completionRate || 0}%`}
                 subtitle="Events successfully completed"
                 icon="check-circle"
-                color="#10B981"
+                color="#333333"
               />
               <StatCard
                 title="Cancellation Rate"
                 value={`${stats.cancellationRate || 0}%`}
                 subtitle="Events cancelled by users"
                 icon="close-circle"
-                color="#EF4444"
+                color="#333333"
               />
             </Surface>
           </ScrollView>
@@ -361,22 +430,26 @@ const Dashboard = () => {
                 <Surface style={styles.revenueGrid} elevation={0}>
                   <Card style={styles.revenueItem} mode="contained">
                     <Card.Content style={styles.revenueContent}>
-                      <IconButton icon="cash" iconColor="#2563EB" size={20} />
+                      <Surface style={[styles.revenueIcon, { backgroundColor: '#F5F5F5' }]}>
+                        <IconButton icon="cash" iconColor="#333333" size={20} />
+                      </Surface>
                       <Surface style={styles.revenueTextContainer}>
-                        <Text variant="labelSmall">Total Revenue</Text>
+                        <Text variant="labelSmall" style={styles.revenueLabel}>Total Revenue</Text>
                         <Text variant="titleMedium" style={styles.revenueValue}>
-                          {formatCurrency(stats.totalRevenue)}
+                          {formatCurrency(stats?.totalRevenue ?? 0)}
                         </Text>
                       </Surface>
                     </Card.Content>
                   </Card>
                   <Card style={styles.revenueItem} mode="contained">
                     <Card.Content style={styles.revenueContent}>
-                      <IconButton icon="clock-alert" iconColor="#D97706" size={20} />
+                      <Surface style={[styles.revenueIcon, { backgroundColor: '#F5F5F5' }]}>
+                        <IconButton icon="clock-alert" iconColor="#333333" size={20} />
+                      </Surface>
                       <Surface style={styles.revenueTextContainer}>
-                        <Text variant="labelSmall">Pending Payments</Text>
+                        <Text variant="labelSmall" style={styles.revenueLabel}>Pending Payments</Text>
                         <Text variant="titleMedium" style={styles.revenueValue}>
-                          {formatCurrency(stats.pendingPayments)}
+                          {formatCurrency(stats?.pendingPayments ?? 0)}
                         </Text>
                       </Surface>
                     </Card.Content>
@@ -389,12 +462,12 @@ const Dashboard = () => {
                         ? (stats.totalRevenue || 0) / ((stats.totalRevenue || 0) + (stats.pendingPayments || 0))
                         : 0
                     }
-                    color="#10B981"
+                    color="#333333"
                     style={styles.progressBar}
                   />
                   <Surface style={styles.progressLabels} elevation={0}>
-                    <Text variant="labelSmall">Collected</Text>
-                    <Text variant="labelSmall">Pending</Text>
+                    <Text variant="labelSmall" style={styles.progressLabel}>Collected</Text>
+                    <Text variant="labelSmall" style={styles.progressLabel}>Pending</Text>
                   </Surface>
                 </Surface>
               </Card.Content>
@@ -408,21 +481,21 @@ const Dashboard = () => {
                 </Text>
                 <Surface style={styles.completedList} elevation={0}>
                   <Surface style={styles.completedItem} elevation={0}>
-                    <Text variant="bodyMedium">This Week</Text>
+                    <Text variant="bodyMedium" style={styles.completedLabel}>This Week</Text>
                     <Text variant="titleMedium" style={styles.completedValue}>
                       {stats.completedEvents?.week || 0}
                     </Text>
                   </Surface>
-                  <Divider />
+                  <Divider style={styles.divider} />
                   <Surface style={styles.completedItem} elevation={0}>
-                    <Text variant="bodyMedium">This Month</Text>
+                    <Text variant="bodyMedium" style={styles.completedLabel}>This Month</Text>
                     <Text variant="titleMedium" style={styles.completedValue}>
                       {stats.completedEvents?.month || 0}
                     </Text>
                   </Surface>
-                  <Divider />
+                  <Divider style={styles.divider} />
                   <Surface style={styles.completedItem} elevation={0}>
-                    <Text variant="bodyMedium">This Year</Text>
+                    <Text variant="bodyMedium" style={styles.completedLabel}>This Year</Text>
                     <Text variant="titleMedium" style={styles.completedValue}>
                       {stats.completedEvents?.year || 0}
                     </Text>
@@ -456,12 +529,18 @@ const Dashboard = () => {
                         <Surface style={styles.activitySide} elevation={0}>
                           <Badge 
                             size={24} 
-                            style={[styles.statusBadge, { backgroundColor: getStatusColor(status) }]}
+                            style={[
+                              styles.statusBadge, 
+                              { 
+                                backgroundColor: getStatusBackgroundColor(status),
+                                color: statusColor
+                              }
+                            ]}
                           >
                             {status}
                           </Badge>
                           <Text variant="bodyMedium" style={styles.revenueText}>
-                            {formatCurrency(activity?.revenue)}
+                            {formatCurrency(activity?.revenue ?? 0)}
                           </Text>
                         </Surface>
                       </Surface>
@@ -470,7 +549,7 @@ const Dashboard = () => {
                 </Surface>
               ) : (
                 <Surface style={styles.emptyState} elevation={0}>
-                  <IconButton icon="text-box-outline" size={40} iconColor="#9CA3AF" />
+                  <IconButton icon="text-box-outline" size={40} iconColor="#CCCCCC" />
                   <Text variant="bodyMedium" style={styles.emptyText}>
                     No recent activity found
                   </Text>
@@ -487,39 +566,42 @@ const Dashboard = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#ffffff',
   },
   container: {
     flex: 1,
   },
   content: {
-    padding: 16,
-    backgroundColor: '#F9FAFB',
+    padding: 20,
+    backgroundColor: '#ffffff',
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#ffffff',
   },
   loadingText: {
     marginTop: 12,
-    color: '#6B7280',
+    color: '#666666',
   },
   header: {
-    marginBottom: 20,
-    backgroundColor: '#F9FAFB',
+    marginBottom: 24,
+    backgroundColor: '#ffffff',
   },
   title: {
-    color: '#1F2937',
+    color: '#000000',
     fontWeight: 'bold',
+    fontSize: 28,
+    marginBottom: 4,
   },
   subtitle: {
-    color: '#6B7280',
-    marginTop: 4,
+    color: '#666666',
+    fontSize: 16,
   },
   errorCard: {
     marginBottom: 16,
+    borderRadius: 12,
     backgroundColor: '#FEF2F2',
   },
   errorContent: {
@@ -531,114 +613,158 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   statsScroll: {
-    marginBottom: 16,
+    marginBottom: 24,
   },
   statsGrid: {
     flexDirection: 'row',
-    gap: 12,
-    backgroundColor: '#F9FAFB',
+    gap: 16,
+    backgroundColor: '#ffffff',
   },
   statCard: {
     minWidth: 160,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
   },
   statHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    marginBottom: 12,
     backgroundColor: 'transparent',
   },
   statTextContainer: {
     backgroundColor: 'transparent',
   },
   statTitle: {
-    color: '#6B7280',
+    color: '#666666',
+    fontSize: 12,
+    fontWeight: '500',
   },
   statValue: {
-    color: '#1F2937',
+    color: '#000000',
     marginTop: 4,
     fontWeight: 'bold',
+    fontSize: 24,
   },
   statIcon: {
-    borderRadius: 8,
-    backgroundColor: 'transparent',
+    borderRadius: 12,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statIconButton: {
+    margin: 0,
   },
   statSubtitle: {
-    color: '#6B7280',
+    color: '#888888',
+    fontSize: 13,
   },
   middleSection: {
     flexDirection: width > 768 ? 'row' : 'column',
-    gap: 16,
-    marginBottom: 16,
-    backgroundColor: '#F9FAFB',
+    gap: 20,
+    marginBottom: 24,
+    backgroundColor: '#ffffff',
   },
   card: {
     flex: 1,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
   },
   cardTitle: {
-    color: '#1F2937',
-    marginBottom: 16,
+    color: '#000000',
+    marginBottom: 20,
     fontWeight: '600',
+    fontSize: 20,
   },
   revenueGrid: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
+    gap: 16,
+    marginBottom: 20,
     backgroundColor: 'transparent',
   },
   revenueItem: {
     flex: 1,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
   },
   revenueContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  revenueIcon: {
+    borderRadius: 10,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   revenueTextContainer: {
-    marginLeft: 8,
+    marginLeft: 12,
     backgroundColor: 'transparent',
   },
+  revenueLabel: {
+    color: '#666666',
+    fontSize: 12,
+  },
   revenueValue: {
-    color: '#1F2937',
+    color: '#000000',
     fontWeight: 'bold',
+    fontSize: 18,
+    marginTop: 2,
   },
   progressContainer: {
-    marginTop: 8,
+    marginTop: 16,
     backgroundColor: 'transparent',
   },
   progressBar: {
-    height: 8,
-    borderRadius: 4,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F0F0F0',
   },
   progressLabels: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 4,
+    marginTop: 8,
     backgroundColor: 'transparent',
   },
+  progressLabel: {
+    color: '#666666',
+    fontSize: 12,
+  },
   completedList: {
-    gap: 8,
+    gap: 12,
     backgroundColor: 'transparent',
   },
   completedItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 8,
     backgroundColor: 'transparent',
   },
+  completedLabel: {
+    color: '#666666',
+  },
   completedValue: {
-    color: '#1F2937',
+    color: '#000000',
     fontWeight: 'bold',
+    fontSize: 18,
+  },
+  divider: {
+    backgroundColor: '#F0F0F0',
   },
   activityList: {
-    gap: 12,
+    gap: 16,
     backgroundColor: 'transparent',
   },
   activityItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
     backgroundColor: 'transparent',
   },
   activityMain: {
@@ -646,33 +772,40 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   activityName: {
-    color: '#1F2937',
-    marginBottom: 2,
+    color: '#000000',
+    marginBottom: 4,
     fontWeight: '500',
+    fontSize: 16,
   },
   activityDate: {
-    color: '#6B7280',
+    color: '#888888',
+    fontSize: 14,
   },
   activitySide: {
     alignItems: 'flex-end',
-    gap: 4,
+    gap: 8,
     backgroundColor: 'transparent',
   },
   statusBadge: {
-    // Badge component handles its own styling
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 24,
+    fontSize: 12,
+    fontWeight: '500',
   },
   revenueText: {
-    color: '#1F2937',
+    color: '#000000',
     fontWeight: '600',
+    fontSize: 15,
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 40,
     backgroundColor: 'transparent',
   },
   emptyText: {
-    marginTop: 8,
-    color: '#6B7280',
+    marginTop: 12,
+    color: '#888888',
   },
 });
 

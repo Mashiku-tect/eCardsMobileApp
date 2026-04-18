@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Platform,
   FlatList,
   Dimensions,
-  ToastAndroid
+  ToastAndroid,
+  View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import {
   Text,
@@ -71,11 +72,32 @@ const EventDetails = () => {
       setEvent(response.data.event);
       setGuests(response.data.guests || []);
     } catch (error) {
-      const errormessage = error.response?.data?.message || 'Failed to fetch event details';
-      Toast.show({
-        type: 'error',
-        text1: errormessage
-      });
+     // const errormessage = error.response?.data?.message || 'Failed to fetch event details';
+
+        let errorMessage = 'Failed to fetch Event Details . Please try again.';
+
+  if (error.response) {
+
+    errorMessage =error.response?.data?.message || 'Failed to fetch event Details. Please try again.';
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
+
+     
     } finally {
       setLoading(false);
     }
@@ -120,26 +142,106 @@ const EventDetails = () => {
         guest.id === guestId ? { ...guest, callStatus: status } : guest
       );
       setGuests(updatedGuests);
+      const responsemessage=response.data?.message || 'Call Status Updated Successfully';
+      if(Platform.OS==='android'){
+        ToastAndroid.show(responsemessage,ToastAndroid.LONG)
+      }
+      else{
 
       Toast.show({
         type: 'success',
         text1: response.data.message
       });
+
+      }
+
     } catch (error) {
-      const errormessage = error.response?.data?.message || 'Failed to update call status';
-      Toast.show({
-        type: 'error',
-        text1: errormessage
-      });
+      //const errormessage = error.response?.data?.message || 'Failed to update call status';
+    
+        let errorMessage = 'Failed to Update Guest Call status. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to Update Guest Call status. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
     } finally {
       setUpdatingCallStatus(null);
     }
+  };
+
+  // Render channel status for SMS/WhatsApp
+  const renderChannelStatus = (smsSent, whatsappSent) => {
+    // If both failed
+    if (!smsSent && !whatsappSent) {
+      return (
+        <View style={styles.channelContainer}>
+          <IconButton 
+            icon="close-circle" 
+            size={16} 
+            iconColor="#dc2626"
+            style={styles.channelIcon}
+          />
+          <Text style={styles.notSentText}>Not sent</Text>
+        </View>
+      );
+    }
+    
+    // If sent via WhatsApp only
+    if (whatsappSent) {
+      return (
+        <View style={styles.channelContainer}>
+          {/* WhatsApp icon - using message-outline as placeholder, you can use a custom WhatsApp icon if available */}
+          <IconButton 
+            icon="whatsapp" 
+            size={16} 
+            iconColor="#25d366"
+            style={styles.channelIcon}
+          />
+          <Text style={styles.whatsappText}>WhatsApp</Text>
+        </View>
+      );
+    }
+    
+    // If sent via SMS only (default fallback)
+    return (
+      <View style={styles.channelContainer}>
+        <IconButton 
+          icon="message-text" 
+          size={16} 
+          iconColor="#3b82f6"
+          style={styles.channelIcon}
+        />
+        <Text style={styles.smsText}>SMS</Text>
+      </View>
+    );
   };
 
   const getPackageColumns = () => {
     const packageName = event?.packagename || 'Basic';
     const baseColumns = [
       { key: 'serial', label: 'S/N', width: 60 },
+      { key: 'guestCode', label: 'Guest Code', width: 110 },
       { key: 'firstName', label: 'First Name', width: 100 },
       { key: 'lastName', label: 'Last Name', width: 100 },
       { key: 'phone', label: 'Phone', width: 120 },
@@ -151,14 +253,14 @@ const EventDetails = () => {
         return [
           ...baseColumns,
           { key: 'rsvpStatus', label: 'RSVP Status', width: 100 },
-          { key: 'smsSent', label: 'SMS Sent', width: 90 }
+          { key: 'invitation', label: 'Invitation', width: 100 }
         ];
       
       case 'standard':
         return [
           ...baseColumns,
           { key: 'rsvpStatus', label: 'RSVP Status', width: 100 },
-          { key: 'smsSent', label: 'SMS Sent', width: 90 },
+          { key: 'invitation', label: 'Invitation', width: 100 },
           { key: 'callStatus', label: 'Call Status', width: 150 }
         ];
       
@@ -166,19 +268,19 @@ const EventDetails = () => {
         return [
           ...baseColumns,
           { key: 'rsvpStatus', label: 'RSVP Status', width: 100 },
-          { key: 'smsSent', label: 'SMS Sent', width: 90 },
-          { key: 'callStatus', label: 'Call Status', width: 150 },
-          { key: 'reminderSent', label: 'Reminder Sent', width: 120 }
+          { key: 'invitation', label: 'Invitation', width: 100 },
+          { key: 'reminder1', label: 'Reminder 1', width: 100 },
+          { key: 'callStatus', label: 'Call Status', width: 150 }
         ];
       
       case 'elite':
         return [
           ...baseColumns,
           { key: 'rsvpStatus', label: 'RSVP Status', width: 100 },
-          { key: 'smsSent', label: 'SMS Sent', width: 90 },
-          { key: 'callStatus', label: 'Call Status', width: 150 },
-          { key: 'reminder1Sent', label: 'Reminder1 Sent', width: 130 },
-          { key: 'reminder2Sent', label: 'Reminder2 Sent', width: 130 }
+          { key: 'invitation', label: 'Invitation', width: 100 },
+          { key: 'reminder1', label: 'Reminder 1', width: 100 },
+          { key: 'reminder2', label: 'Reminder 2', width: 100 },
+          { key: 'callStatus', label: 'Call Status', width: 150 }
         ];
       
       default:
@@ -216,19 +318,46 @@ const EventDetails = () => {
       setAvailableTenants(available);
       
     } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Failed to load scanner permissions'
-      });
+      let errorMessage = 'Failed to load Scann Permissions. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to Load Scann Permissions. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
     } finally {
       setLoadingPermissions(false);
     }
   };
 
   const addScanner = async (tenantId) => {
+    if(!tenantId){
+      return;
+    }
+
     try {
       const token = await AsyncStorage.getItem('authToken');
-      await api.post(
+    const response=  await api.post(
         `${config.BASE_URL}/api/events/${eventId}/scan-permissions`, 
         { tenant_id: tenantId },
         {
@@ -239,37 +368,96 @@ const EventDetails = () => {
       );
       
       await fetchScanPermissions();
-      Toast.show({
+      const responsemessage=response.data?.message || 'Tenant added as scanner successfully';
+      if(Platform.OS==='android'){
+        ToastAndroid.show(responsemessage,ToastAndroid.LONG)
+      }
+      else{
+Toast.show({
         type: 'success',
-        text1: 'Tenant added as scanner successfully!'
+        text1:'Success',
+        text12: responsemessage
       });
+      }
+      
     } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Failed to add tenant as scanner'
-      });
+       let errorMessage = 'Failed to add tenant as scanner. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to add tenant as scanner. Please try again.';
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
     }
   };
 
   const removeScanner = async (scannerId) => {
     try {
       const token = await AsyncStorage.getItem('authToken');
-      await api.delete(`${config.BASE_URL}/api/events/${eventId}/scan-permissions/${scannerId}`, {
+    const response=  await api.delete(`${config.BASE_URL}/api/events/${eventId}/scan-permissions/${scannerId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
       
       await fetchScanPermissions();
-      Toast.show({
+      const responsemessage=response.data?.message || 'Scan permission removed successfully!';
+      if(Platform.OS==='android'){
+        ToastAndroid.show(responsemessage,ToastAndroid.LONG)
+      }
+      else{
+ Toast.show({
         type: 'success',
-        text1: 'Scan permission removed successfully!'
+        text1:'Success',
+        text1: responsemessage
       });
+      }
+     
     } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Failed to remove scan permission'
-      });
+       let errorMessage = 'Failed to remove scann permission. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to remove scann permission. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
     }
   };
 
@@ -293,22 +481,40 @@ const EventDetails = () => {
       else{
 Toast.show({
         type: 'success',
-        text1: responsemessage
+        text1:'Success',
+        text2: responsemessage
       });
       }
       setEvent({ ...event, active: false, cancelled: true });
       
     } catch (error) {
-      const errormessage = error.response?.data?.message || 'Failed to cancel event';
-      if(Platform.OS==='android'){
-        ToastAndroid.show(errormessage,ToastAndroid.SHORT);
-        
-      }else{
-         Toast.show({
-        type: 'error',
-        text1: errormessage
-      });
-      }
+      let errorMessage = 'Failed to Cancel Event. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to Cancel Event. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
      
     } finally {
       setUpdating(false);
@@ -335,16 +541,33 @@ Toast.show({
     }
       navigation.navigate('HomeTabs', { screen: 'Events' });
     } catch (error) {
-      const errormessage = error.response?.data?.message || 'Failed to delete event';
-      if(Platform.OS==='android'){
-        ToastAndroid.show(errormessage,ToastAndroid.SHORT);
-      }
-      else{
- Toast.show({
-        type: 'error',
-        text1: errormessage
-      });
-      }
+       let errorMessage = 'Failed to Delete Event. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to Delete Event. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
      
     } finally {
       setDeleteDialogVisible(false);
@@ -354,9 +577,7 @@ Toast.show({
   const handleMarkAsCompleted = async () => {
     setUpdating(true);
     try {
-     // await AsyncStorage.removeItem("authToken");
       const token = await AsyncStorage.getItem('authToken');
-     // const testingtoken='Invalid Token';
       const response = await api.put(
         `${config.BASE_URL}/api/events/complete/${eventId}`,
         {},
@@ -375,21 +596,39 @@ Toast.show({
       else{
 Toast.show({
         type: 'success',
-        text1: responsemessage
+        text1:'Success',
+        text2: responsemessage
       });
       }
       
     } catch (error) {
-      const errormessage = error.response?.data?.message || 'Failed to mark event as completed';
-      if(Platform.OS==='android'){
-        ToastAndroid.show(errormessage,ToastAndroid.SHORT);
-      }
-      else{
-Toast.show({
-        type: 'error',
-        text1: errormessage
-      });
-      }
+       let errorMessage = 'Failed to Mark Event as completed. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to Mark Event As Completed. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
       
     } finally {
       setUpdating(false);
@@ -398,12 +637,14 @@ Toast.show({
   };
 
   const viewReport = () => {
+    if(!eventId) return;
     navigation.navigate('Reports', { 
       id: eventId,
     });
   };
 
   const manageScanners = () => {
+    if(!eventId) return;
     navigation.navigate('ScanPermissions', { eventId });
   };
 
@@ -452,7 +693,7 @@ Toast.show({
     if (updatingCallStatus === guest.id) {
       return (
         <Surface style={styles.callStatusLoading} elevation={0}>
-          <ActivityIndicator size="small" />
+          <ActivityIndicator size="small" color="#000000" />
         </Surface>
       );
     }
@@ -536,94 +777,122 @@ Toast.show({
     );
   };
 
-  const renderGuestItem = ({ item, index }) => {
-    const columns = getPackageColumns();
-    
-    return (
-      <Surface style={styles.guestRow} elevation={0}>
-        {columns.map((column) => (
-          <Surface key={column.key} style={[styles.guestCell, { width: column.width }]} elevation={0}>
-            {renderGuestCell(item, column.key, index)}
-          </Surface>
-        ))}
-      </Surface>
-    );
-  };
+ const renderGuestItem = ({ item, index }) => {
+  // Ensure getPackageColumns always returns an array
+  const columns = getPackageColumns() ?? [];
+
+  return (
+    <Surface style={styles.guestRow} elevation={0}>
+      {columns.map((column, colIndex) => (
+        <Surface
+          key={column?.key ?? colIndex} // fallback key
+          style={[styles.guestCell, { width: column?.width ?? 100 }]} // fallback width
+          elevation={0}
+        >
+          {renderGuestCell?.(item ?? {}, column?.key ?? "", index)}
+        </Surface>
+      ))}
+    </Surface>
+  );
+};
+
 
   const renderGuestCell = (item, key, index) => {
+    const packageName = event?.packagename || 'Basic';
+    
     switch (key) {
       case 'serial':
-        return <Text variant="bodySmall">{(currentPage - 1) * itemsPerPage + index + 1}</Text>;
+        return <Text variant="bodySmall" style={styles.guestCellText}>{(currentPage - 1) * itemsPerPage + index + 1}</Text>;
       
       case 'firstName':
-        return <Text variant="bodySmall">{item.firstName || 'N/A'}</Text>;
+        return <Text variant="bodySmall" style={styles.guestCellText}>{item.firstName || 'N/A'}</Text>;
+
+      case 'guestCode':
+        return <Text variant="bodySmall" style={styles.guestCellText}>{item.guestCode || 'N/A'}</Text>;
       
       case 'lastName':
-        return <Text variant="bodySmall">{item.lastName || 'N/A'}</Text>;
+        return <Text variant="bodySmall" style={styles.guestCellText}>{item.lastName || 'N/A'}</Text>;
       
       case 'phone':
-        return <Text variant="bodySmall">{item.phone || 'N/A'}</Text>;
+        return <Text variant="bodySmall" style={styles.guestCellText}>{item.phone || 'N/A'}</Text>;
       
       case 'type':
         return (
-          <Text variant="bodySmall">
+          <Text variant="bodySmall" style={styles.guestCellText}>
             {item.type ? item.type.charAt(0).toUpperCase() + item.type.slice(1) : 'N/A'}
           </Text>
         );
       
-      case 'status':
+      case 'rsvpStatus':
         return (
           <Chip
             mode="outlined"
             compact
             style={[
-              styles.statusChip,
-              item.status === 'Confirmed' ? styles.confirmedChip : styles.pendingChip
+              styles.rsvpChip,
+              item?.rsvpStatus === 'Accepted' ? styles.acceptedChip : 
+              item?.rsvpStatus === 'Declined' ? styles.declinedChip : 
+              styles.pendingChip
             ]}
-            textStyle={item.status === 'Confirmed' ? styles.confirmedChipText : styles.pendingChipText}
+            textStyle={styles.rsvpChipText}
           >
-            {item.status || 'Pending'}
+            {item.rsvpStatus || 'Pending'}
           </Chip>
         );
       
-      case 'rsvpStatus':
-        return <Text variant="bodySmall">{item.rsvpStatus || 'Pending'}</Text>;
-      
-      case 'smsSent':
-        return <Text variant="bodySmall">{item.smsSent ? 'Yes' : 'No'}</Text>;
+      case 'invitation':
+        return renderChannelStatus(
+          item.invitationSmsSent || item.smsSent, // fallback to old field
+          item.invitationWhatsappSent
+        );
       
       case 'callStatus':
         return renderCallStatusButtons(item);
       
-      case 'reminderSent':
-        return <Text variant="bodySmall">{item.Remainder1Sent ? 'Yes' : 'No'}</Text>;
+      case 'reminder1':
+        return renderChannelStatus(
+          item.reminder1SmsSent || item.Remainder1Sent,
+          item.reminder1WhatsappSent
+        );
       
-      case 'reminder1Sent':
-        return <Text variant="bodySmall">{item.Remainder1Sent ? 'Yes' : 'No'}</Text>;
+      case 'reminder2':
+        return renderChannelStatus(
+          item.reminder2SmsSent || item.Remainder2Sent,
+          item.reminder2WhatsappSent
+        );
       
-      case 'reminder2Sent':
-        return <Text variant="bodySmall">{item.Remainder2Sent ? 'Yes' : 'No'}</Text>;
+      case 'reminderSent': // For Pro package compatibility
+        return renderChannelStatus(
+          item.reminder1SmsSent || item.Remainder1Sent,
+          item.reminder1WhatsappSent
+        );
       
       default:
-        return <Text variant="bodySmall">N/A</Text>;
+        return <Text variant="bodySmall" style={styles.guestCellText}>N/A</Text>;
     }
   };
 
   const renderTableHeader = () => {
-    const columns = getPackageColumns();
-    
-    return (
-      <Surface style={styles.tableHeader} elevation={1}>
-        {columns.map((column) => (
-          <Surface key={column.key} style={[styles.headerCell, { width: column.width }]} elevation={0}>
-            <Text variant="labelSmall" style={styles.headerCellText}>
-              {column.label}
-            </Text>
-          </Surface>
-        ))}
-      </Surface>
-    );
-  };
+  // Ensure columns is always an array
+  const columns = getPackageColumns() ?? [];
+
+  return (
+    <Surface style={styles.tableHeader} elevation={1}>
+      {columns.map((column, index) => (
+        <Surface
+          key={column?.key ?? index} // fallback key
+          style={[styles.headerCell, { width: column?.width ?? 100 }]} // default width
+          elevation={0}
+        >
+          <Text variant="labelSmall" style={styles.headerCellText}>
+            {column?.label ?? ""}
+          </Text>
+        </Surface>
+      ))}
+    </Surface>
+  );
+};
+
 
   const formatDate = (dateString) => {
     const options = { 
@@ -637,27 +906,41 @@ Toast.show({
 
   if (loading) {
     return (
-      <Surface style={styles.loadingContainer} elevation={0}>
-        <ActivityIndicator size="small" />
-        <Text variant="bodyLarge" style={styles.loadingText}>
-          Loading event details...
-        </Text>
-      </Surface>
+      <SafeAreaView style={styles.container}>
+        <StatusBar 
+          barStyle="dark-content" 
+          backgroundColor="#ffffff"
+          translucent={false}
+        />
+        <Surface style={styles.loadingContainer} elevation={0}>
+          <ActivityIndicator size="small" color="#000000" />
+          <Text variant="bodyLarge" style={styles.loadingText}>
+            Loading event details...
+          </Text>
+        </Surface>
+      </SafeAreaView>
     );
   }
 
   if (!event) {
     return (
-      <Surface style={styles.errorContainer} elevation={0}>
-        <Text variant="headlineMedium">Event Not Found</Text>
-        <Button
-          mode="contained"
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          Back to Events
-        </Button>
-      </Surface>
+      <SafeAreaView style={styles.container}>
+        <StatusBar 
+          barStyle="dark-content" 
+          backgroundColor="#ffffff"
+          translucent={false}
+        />
+        <Surface style={styles.errorContainer} elevation={0}>
+          <Text variant="headlineMedium" style={styles.errorTitle}>Event Not Found</Text>
+          <Button
+            mode="contained"
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            Back to Events
+          </Button>
+        </Surface>
+      </SafeAreaView>
     );
   }
 
@@ -670,7 +953,6 @@ Toast.show({
   const tableWidth = getTableWidth();
   const needsHorizontalScroll = tableWidth > screenWidth - 32;
 
-  // Fixed: Use proper color values instead of theme names
   const getStatusChipProps = () => {
     if (event.cancelled) {
       return { style: styles.cancelledChip, textStyle: styles.cancelledChipText };
@@ -697,26 +979,36 @@ Toast.show({
     <SafeAreaView style={styles.container}>
       <StatusBar 
         barStyle="dark-content" 
-        backgroundColor="#f8f9fa"
+        backgroundColor="#ffffff"
         translucent={false}
       />
       
       {/* Dialogs */}
       <Portal>
         {/* Cancel Event Dialog */}
-        <Dialog visible={cancelDialogVisible} onDismiss={() => setCancelDialogVisible(false)}>
-          <Dialog.Title>Cancel Event</Dialog.Title>
+        <Dialog 
+          visible={cancelDialogVisible} 
+          onDismiss={() => setCancelDialogVisible(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>Cancel Event</Dialog.Title>
           <Dialog.Content>
-            <Paragraph>
+            <Paragraph style={styles.dialogText}>
               Are you sure you want to cancel this event? This action cannot be undone.
             </Paragraph>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setCancelDialogVisible(false)}>Cancel</Button>
+            <Button 
+              onPress={() => setCancelDialogVisible(false)}
+              textColor="#666666"
+            >
+              Cancel
+            </Button>
             <Button 
               onPress={handleCancelEvent}
               mode="contained"
               loading={updating}
+              style={styles.cancelEventButton}
             >
               Cancel Event
             </Button>
@@ -724,19 +1016,29 @@ Toast.show({
         </Dialog>
 
         {/* Complete Event Dialog */}
-        <Dialog visible={completeDialogVisible} onDismiss={() => setCompleteDialogVisible(false)}>
-          <Dialog.Title>Mark as Completed</Dialog.Title>
+        <Dialog 
+          visible={completeDialogVisible} 
+          onDismiss={() => setCompleteDialogVisible(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>Mark as Completed</Dialog.Title>
           <Dialog.Content>
-            <Paragraph>
+            <Paragraph style={styles.dialogText}>
               Are you sure you want to mark this event as completed?
             </Paragraph>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setCompleteDialogVisible(false)}>Cancel</Button>
+            <Button 
+              onPress={() => setCompleteDialogVisible(false)}
+              textColor="#666666"
+            >
+              Cancel
+            </Button>
             <Button 
               onPress={handleMarkAsCompleted}
               mode="contained"
               loading={updating}
+              style={styles.completeEventButton}
             >
               Mark Complete
             </Button>
@@ -744,15 +1046,24 @@ Toast.show({
         </Dialog>
 
         {/* Delete Event Dialog */}
-        <Dialog visible={deleteDialogVisible} onDismiss={() => setDeleteDialogVisible(false)}>
-          <Dialog.Title>Delete Event</Dialog.Title>
+        <Dialog 
+          visible={deleteDialogVisible} 
+          onDismiss={() => setDeleteDialogVisible(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>Delete Event</Dialog.Title>
           <Dialog.Content>
-            <Paragraph>
+            <Paragraph style={styles.dialogText}>
               Are you sure you want to delete this event?
             </Paragraph>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDeleteDialogVisible(false)}>Cancel</Button>
+            <Button 
+              onPress={() => setDeleteDialogVisible(false)}
+              textColor="#666666"
+            >
+              Cancel
+            </Button>
             <Button 
               onPress={handleDeleteEvent}
               mode="contained"
@@ -769,23 +1080,25 @@ Toast.show({
           onDismiss={() => setPermissionModalVisible(false)}
           contentContainerStyle={styles.modalContainer}
         >
-          <Card>
+          <Card style={styles.modalCard}>
             <Card.Title
               title="Manage Scan Permissions"
               titleVariant="titleLarge"
+              titleStyle={styles.modalTitle}
               right={(props) => (
                 <IconButton
                   {...props}
                   icon="close"
                   onPress={() => setPermissionModalVisible(false)}
+                  iconColor="#666666"
                 />
               )}
             />
             <Card.Content>
               {loadingPermissions ? (
                 <Surface style={styles.loadingPermissions} elevation={0}>
-                  <ActivityIndicator size="small" />
-                  <Text variant="bodyMedium">Loading permissions...</Text>
+                  <ActivityIndicator size="small" color="#000000" />
+                  <Text variant="bodyMedium" style={styles.loadingPermissionsText}>Loading permissions...</Text>
                 </Surface>
               ) : (
                 <ScrollView style={styles.modalBody}>
@@ -798,18 +1111,18 @@ Toast.show({
                       <Card key={scanner.id} style={styles.scannerCard} mode="outlined">
                         <Card.Content style={styles.scannerContent}>
                           <Surface style={styles.scannerInfo} elevation={0}>
-                            <Text variant="bodyLarge">
-                              {scanner.tenant?.firstName} {scanner.tenant?.lastName}
+                            <Text variant="bodyLarge" style={styles.scannerName}>
+                              {scanner.tenant?.firstName?? 'eCards'} {scanner.tenant?.lastName?? 'User'}
                             </Text>
                             <Text variant="bodyMedium" style={styles.scannerEmail}>
-                              {scanner.tenant?.email}
+                              {scanner.tenant?.email ?? 'ecardsuser@mashikutech.co.tz'}
                             </Text>
                           </Surface>
                           <Button
                             mode="outlined"
                             onPress={() => removeScanner(scanner.id)}
                             style={styles.removeButton}
-                            textColor="#DC2626"
+                            textColor="#666666"
                           >
                             Remove
                           </Button>
@@ -833,11 +1146,11 @@ Toast.show({
                       <Card key={tenant.id} style={styles.scannerCard} mode="outlined">
                         <Card.Content style={styles.scannerContent}>
                           <Surface style={styles.scannerInfo} elevation={0}>
-                            <Text variant="bodyLarge">
-                              {tenant.firstName} {tenant.lastName}
+                            <Text variant="bodyLarge" style={styles.scannerName}>
+                              {tenant?.firstName ?? 'eCards'} {tenant?.lastName ?? 'User'}
                             </Text>
                             <Text variant="bodyMedium" style={styles.scannerEmail}>
-                              {tenant.email}
+                              {tenant?.email?? 'ecardsuser@mashikutech.co.tz'}
                             </Text>
                           </Surface>
                           <Button
@@ -864,12 +1177,13 @@ Toast.show({
 
       <ScrollView style={styles.scrollView}>
         {/* Header */}
-        <Surface style={styles.header} elevation={1}>
+        <Surface style={styles.header} elevation={0}>
           <Button
             mode="outlined"
             icon="arrow-left"
             onPress={() => navigation.goBack()}
             style={styles.backButton}
+            textColor="#333333"
           >
             Back to Events
           </Button>
@@ -971,22 +1285,22 @@ Toast.show({
 
             {/* Package Info */}
             <Surface style={styles.packageInfo} elevation={0}>
-              <Text variant="labelLarge">Package:</Text>
-              <Chip mode="flat" style={styles.packageChip}>
+              <Text variant="labelLarge" style={styles.packageLabel}>Package:</Text>
+              <Chip mode="flat" style={styles.packageChip} textStyle={styles.packageChipText}>
                 {event.packagename || 'Basic'}
               </Chip>
             </Surface>
 
             {/* Event Status Notices */}
             {event.cancelled && (
-              <Card style={styles.noticeCard} mode="outlined">
+              <Card style={[styles.noticeCard, styles.cancelledNotice]} mode="outlined">
                 <Card.Content style={styles.noticeContent}>
-                  <IconButton icon="alert-circle" iconColor="#DC2626" size={20} />
+                  <IconButton icon="alert-circle" iconColor="#999999" size={20} />
                   <Surface style={styles.noticeText} elevation={0}>
                     <Text variant="titleSmall" style={styles.noticeTitle}>
                       Event Cancelled
                     </Text>
-                    <Text variant="bodyMedium">
+                    <Text variant="bodyMedium" style={styles.noticeDescription}>
                       This event has been cancelled and is no longer active.
                     </Text>
                   </Surface>
@@ -995,14 +1309,14 @@ Toast.show({
             )}
 
             {isNotDealt && !event.cancelled && (
-              <Card style={styles.noticeCard} mode="outlined">
+              <Card style={[styles.noticeCard, styles.notDealtNotice]} mode="outlined">
                 <Card.Content style={styles.noticeContent}>
-                  <IconButton icon="clock-alert" iconColor="#8B5CF6" size={20} />
+                  <IconButton icon="clock-alert" iconColor="#999999" size={20} />
                   <Surface style={styles.noticeText} elevation={0}>
                     <Text variant="titleSmall" style={styles.noticeTitle}>
                       Event Not Dealt
                     </Text>
-                    <Text variant="bodyMedium">
+                    <Text variant="bodyMedium" style={styles.noticeDescription}>
                       This event date has passed and was not processed.
                     </Text>
                   </Surface>
@@ -1014,36 +1328,39 @@ Toast.show({
             <Surface style={styles.detailsContainer} elevation={0}>
               <Surface style={styles.detailRow} elevation={0}>
                 <Surface style={styles.detailItem} elevation={0}>
-                  <IconButton icon="calendar" size={20} />
+                  <IconButton icon="calendar" size={20} iconColor="#666666" />
                   <Surface style={styles.detailContent} elevation={0}>
-                    <Text variant="labelMedium">Date</Text>
-                    <Text variant="bodyMedium">{formatDate(event.eventDate)}</Text>
+                    <Text variant="labelMedium" style={styles.detailLabel}>Date</Text>
+                    <Text variant="bodyMedium" style={styles.detailText}>{event?.eventDate
+  ? formatDate(event.eventDate)
+  : "No date available"}
+</Text>
                   </Surface>
                 </Surface>
 
                 <Surface style={styles.detailItem} elevation={0}>
-                  <IconButton icon="clock" size={20} />
+                  <IconButton icon="clock" size={20} iconColor="#666666" />
                   <Surface style={styles.detailContent} elevation={0}>
-                    <Text variant="labelMedium">Time</Text>
-                    <Text variant="bodyMedium">{event.eventTime}</Text>
+                    <Text variant="labelMedium" style={styles.detailLabel}>Time</Text>
+                    <Text variant="bodyMedium" style={styles.detailText}>{event?.eventTime?? 'Not Set'}</Text>
                   </Surface>
                 </Surface>
               </Surface>
 
               <Surface style={styles.detailRow} elevation={0}>
                 <Surface style={styles.detailItem} elevation={0}>
-                  <IconButton icon="map-marker" size={20} />
+                  <IconButton icon="map-marker" size={20} iconColor="#666666" />
                   <Surface style={styles.detailContent} elevation={0}>
-                    <Text variant="labelMedium">Location</Text>
-                    <Text variant="bodyMedium">{event.location}</Text>
+                    <Text variant="labelMedium" style={styles.detailLabel}>Location</Text>
+                    <Text variant="bodyMedium" style={styles.detailText}>{event?.location?? 'Not Set'}</Text>
                   </Surface>
                 </Surface>
 
                 <Surface style={styles.detailItem} elevation={0}>
-                  <IconButton icon="tag" size={20} />
+                  <IconButton icon="tag" size={20} iconColor="#666666" />
                   <Surface style={styles.detailContent} elevation={0}>
-                    <Text variant="labelMedium">Category</Text>
-                    <Text variant="bodyMedium">
+                    <Text variant="labelMedium" style={styles.detailLabel}>Category</Text>
+                    <Text variant="bodyMedium" style={styles.detailText}>
                       {event.category ? event.category.charAt(0).toUpperCase() + event.category.slice(1) : 'N/A'}
                     </Text>
                   </Surface>
@@ -1053,18 +1370,18 @@ Toast.show({
 
             {/* Description */}
             <Surface style={styles.descriptionContainer} elevation={0}>
-              <Text variant="titleLarge">Description</Text>
+              <Text variant="titleLarge" style={styles.descriptionTitle}>Description</Text>
               <Card style={styles.descriptionCard} mode="outlined">
                 <Card.Content>
-                  <Text variant="bodyMedium">{event.description}</Text>
+                  <Text variant="bodyMedium" style={styles.descriptionText}>{event?.description ?? 'No description'}</Text>
                 </Card.Content>
               </Card>
             </Surface>
 
             {/* Guest List */}
             <Surface style={styles.guestsContainer} elevation={0}>
-              <Text variant="titleLarge">
-                Guest List ({event.totalGuests} guests)
+              <Text variant="titleLarge" style={styles.guestsTitle}>
+                Guest List ({event?.totalGuests || 0} guests)
               </Text>
               {guests.length > 0 ? (
                 <>
@@ -1101,6 +1418,7 @@ Toast.show({
                             onPress={goToPreviousPage}
                             disabled={currentPage === 1}
                             icon="chevron-left"
+                            textColor="#333333"
                           >
                             Previous
                           </Button>
@@ -1111,6 +1429,7 @@ Toast.show({
                               mode={currentPage === page ? "contained" : "outlined"}
                               onPress={() => paginate(page)}
                               style={styles.paginationButton}
+                              textColor={currentPage === page ? "#ffffff" : "#333333"}
                             >
                               {page}
                             </Button>
@@ -1122,6 +1441,7 @@ Toast.show({
                             disabled={currentPage === totalPages}
                             icon="chevron-right"
                             contentStyle={styles.nextButtonContent}
+                            textColor="#333333"
                           >
                             Next
                           </Button>
@@ -1133,8 +1453,8 @@ Toast.show({
               ) : (
                 <Card style={styles.noGuestsCard} mode="outlined">
                   <Card.Content style={styles.noGuestsContent}>
-                    <IconButton icon="account-group" size={40} />
-                    <Text variant="bodyLarge">No guests added yet.</Text>
+                    <IconButton icon="account-group" size={40} iconColor="#CCCCCC" />
+                    <Text variant="bodyLarge" style={styles.noGuestsText}>No guests added yet.</Text>
                   </Card.Content>
                 </Card>
               )}
@@ -1159,28 +1479,34 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
+    color: '#666666',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#ffffff',
+  },
+  errorTitle: {
+    color: '#000000',
+    marginBottom: 20,
   },
   scrollView: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 24,
     flexWrap: 'wrap',
-    padding: 16,
-    marginTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    backgroundColor: '#ffffff',
   },
   backButton: {
     marginBottom: 12,
+    borderColor: '#e0e0e0',
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1191,37 +1517,42 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   actionButton: {
+    borderRadius: 8,
     minWidth: 100,
   },
   actionButtonContent: {
+    paddingVertical: 4,
     flexDirection: 'row-reverse',
   },
   scannerButton: {
-    backgroundColor: '#EA580C',
+    backgroundColor: '#333333',
   },
   reportButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#555555',
   },
   cancelButton: {
-    backgroundColor: '#EAB308',
+    backgroundColor: '#777777',
   },
   completeButton: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#999999',
   },
   editButton: {
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#333333',
   },
   deleteButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#000000',
   },
   card: {
     marginBottom: 20,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
     flexWrap: 'wrap',
     backgroundColor: 'transparent',
   },
@@ -1229,97 +1560,143 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
     fontWeight: 'bold',
+    color: '#000000',
+    fontSize: 28,
   },
-  // Fixed: Proper chip styles with color values
+  // Chip styles
   upcomingChip: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#f5f5f5',
+    borderColor: '#e0e0e0',
   },
   upcomingChipText: {
-    color: '#065F46',
+    color: '#666666',
   },
   completedChip: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#f9f9f9',
+    borderColor: '#e0e0e0',
   },
   completedChipText: {
-    color: '#374151',
+    color: '#666666',
   },
   cancelledChip: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#f9f9f9',
+    borderColor: '#e0e0e0',
   },
   cancelledChipText: {
-    color: '#DC2626',
+    color: '#666666',
   },
   notDealtChip: {
-    backgroundColor: '#EDE9FE',
+    backgroundColor: '#f9f9f9',
+    borderColor: '#e0e0e0',
   },
   notDealtChipText: {
-    color: '#8B5CF6',
+    color: '#666666',
   },
   statusChip: {
-    height: 24,
+    height: 32,
   },
   packageInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
     backgroundColor: 'transparent',
   },
+  packageLabel: {
+    color: '#000000',
+    marginRight: 8,
+  },
   packageChip: {
-    marginLeft: 8,
-    backgroundColor: '#E0F2FE',
+    backgroundColor: '#f5f5f5',
+  },
+  packageChipText: {
+    color: '#666666',
   },
   noticeCard: {
-    marginBottom: 16,
+    marginBottom: 20,
+    borderRadius: 12,
     borderLeftWidth: 4,
+  },
+  cancelledNotice: {
+    borderLeftColor: '#999999',
+  },
+  notDealtNotice: {
+    borderLeftColor: '#999999',
   },
   noticeContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   noticeText: {
-    marginLeft: 8,
+    marginLeft: 12,
     flex: 1,
     backgroundColor: 'transparent',
   },
   noticeTitle: {
     fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  noticeDescription: {
+    color: '#666666',
   },
   detailsContainer: {
-    marginBottom: 20,
+    marginBottom: 24,
     backgroundColor: 'transparent',
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 20,
     flexWrap: 'wrap',
     gap: 16,
     backgroundColor: 'transparent',
   },
   detailItem: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flex: 1,
     minWidth: '45%',
     backgroundColor: 'transparent',
   },
   detailContent: {
-    marginLeft: 8,
+    marginLeft: 12,
     backgroundColor: 'transparent',
+  },
+  detailLabel: {
+    color: '#000000',
+    marginBottom: 4,
+  },
+  detailText: {
+    color: '#666666',
   },
   descriptionContainer: {
     marginBottom: 24,
     backgroundColor: 'transparent',
   },
+  descriptionTitle: {
+    color: '#000000',
+    marginBottom: 12,
+  },
   descriptionCard: {
-    marginTop: 8,
+    borderRadius: 12,
+    borderColor: '#f0f0f0',
+  },
+  descriptionText: {
+    color: '#666666',
+    lineHeight: 22,
   },
   guestsContainer: {
     marginBottom: 20,
     backgroundColor: 'transparent',
   },
+  guestsTitle: {
+    color: '#000000',
+    marginBottom: 16,
+  },
   guestsCard: {
     marginBottom: 16,
+    borderRadius: 12,
+    borderColor: '#f0f0f0',
   },
   guestsTable: {
     padding: 0,
@@ -1333,31 +1710,89 @@ const styles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: 'row',
-    paddingVertical: 12,
-    backgroundColor: '#F3F4F6',
+    paddingVertical: 16,
+    backgroundColor: '#f9f9f9',
   },
   headerCell: {
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
     backgroundColor: 'transparent',
   },
   headerCellText: {
     fontWeight: 'bold',
     textAlign: 'center',
+    color: '#000000',
   },
   guestRow: {
     flexDirection: 'row',
-    paddingVertical: 12,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#f0f0f0',
     backgroundColor: 'transparent',
   },
   guestCell: {
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
     backgroundColor: 'transparent',
+  },
+  guestCellText: {
+    color: '#666666',
+    textAlign: 'center',
+  },
+  // RSVP Chip Styles
+  rsvpChip: {
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  acceptedChip: {
+    backgroundColor: '#d1fae5',
+    borderColor: '#10b981',
+  },
+  declinedChip: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#ef4444',
+  },
+  pendingChip: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+  },
+  rsvpChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  // Channel Status Styles
+  channelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  channelIcon: {
+    margin: 0,
+    padding: 0,
+    width: 24,
+    height: 24,
+  },
+  notSentText: {
+    fontSize: 12,
+    color: '#dc2626',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  whatsappText: {
+    fontSize: 12,
+    color: '#25d366',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  smsText: {
+    fontSize: 12,
+    color: '#3b82f6',
+    marginLeft: 4,
+    fontWeight: '500',
   },
   // Call Status Styles
   callStatusContainer: {
@@ -1365,29 +1800,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 4,
+    marginLeft:50,
     backgroundColor: 'transparent',
   },
   callStatusButton: {
     margin: 0,
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
   },
   reachableButton: {
-    borderColor: '#10B981',
+    borderColor: '#333333',
   },
   reachableButtonActive: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#333333',
   },
   notReachableButton: {
-    borderColor: '#EF4444',
+    borderColor: '#666666',
   },
   notReachableButtonActive: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#666666',
   },
   callStatusButtonText: {
     fontSize: 12,
+    color: '#666666',
   },
   callStatusButtonTextActive: {
-    color: '#FFFFFF',
+    color: '#ffffff',
     fontSize: 12,
   },
   callStatusLoading: {
@@ -1396,32 +1834,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'transparent',
   },
-  confirmedChip: {
-    backgroundColor: '#D1FAE5',
-  },
-  pendingChip: {
-    backgroundColor: '#FEF3C7',
-  },
-  confirmedChipText: {
-    color: '#065F46',
-  },
-  pendingChipText: {
-    color: '#92400E',
-  },
   noGuestsCard: {
     marginTop: 8,
+    borderRadius: 12,
+    borderColor: '#f0f0f0',
   },
   noGuestsContent: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 40,
+  },
+  noGuestsText: {
+    color: '#666666',
+    marginTop: 12,
   },
   paginationCard: {
     marginTop: 16,
+    borderRadius: 12,
+    borderColor: '#f0f0f0',
   },
   paginationInfo: {
     textAlign: 'center',
-    marginBottom: 12,
-    color: '#6B7280',
+    marginBottom: 16,
+    color: '#666666',
   },
   paginationControls: {
     flexDirection: 'row',
@@ -1433,14 +1867,45 @@ const styles = StyleSheet.create({
   },
   paginationButton: {
     minWidth: 40,
+    borderRadius: 6,
   },
   nextButtonContent: {
     flexDirection: 'row',
+  },
+  // Dialog Styles
+  dialog: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+  },
+  dialogTitle: {
+    color: '#000000',
+    fontWeight: '600',
+  },
+  dialogText: {
+    color: '#666666',
+    lineHeight: 22,
+  },
+  cancelEventButton: {
+    backgroundColor: '#777777',
+  },
+  completeEventButton: {
+    backgroundColor: '#999999',
+  },
+  deleteDialogButton: {
+    backgroundColor: '#000000',
   },
   // Modal Styles
   modalContainer: {
     margin: 20,
     maxHeight: '80%',
+  },
+  modalCard: {
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+  },
+  modalTitle: {
+    color: '#000000',
+    fontWeight: '600',
   },
   modalBody: {
     maxHeight: 400,
@@ -1450,15 +1915,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'transparent',
   },
+  loadingPermissionsText: {
+    color: '#666666',
+    marginTop: 12,
+  },
   sectionTitle: {
     marginBottom: 12,
     marginTop: 8,
+    color: '#000000',
+    fontWeight: '600',
   },
   modalDivider: {
-    marginVertical: 16,
+    marginVertical: 20,
+    backgroundColor: '#f0f0f0',
   },
   scannerCard: {
-    marginBottom: 8,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderColor: '#f0f0f0',
   },
   scannerContent: {
     flexDirection: 'row',
@@ -1469,23 +1943,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
+  scannerName: {
+    color: '#000000',
+    marginBottom: 4,
+  },
   scannerEmail: {
-    color: '#6B7280',
+    color: '#666666',
   },
   addButton: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#333333',
+    borderRadius: 8,
   },
   removeButton: {
-    borderColor: '#FECACA',
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
   },
   noScannersText: {
     textAlign: 'center',
-    color: '#6B7280',
+    color: '#666666',
     fontStyle: 'italic',
     padding: 20,
-  },
-  deleteDialogButton: {
-    backgroundColor: '#EF4444',
   },
 });
 

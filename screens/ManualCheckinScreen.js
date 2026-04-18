@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Platform,
   Alert,
-  ToastAndroid
+  ToastAndroid,
+  StyleSheet,
+  RefreshControl,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import {
   Text,
-  TextInput,
   Card,
   ActivityIndicator,
   Surface,
@@ -19,14 +22,15 @@ import {
   Chip,
   Divider,
   Searchbar,
-  Avatar,
-  Badge
+  Avatar
 } from 'react-native-paper';
 import axios from 'axios';
 import config from './config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import api from '../utils/api';
+
+const ITEMS_PER_PAGE = 15; // Number of guests to show per page
 
 const ManualCheckin = () => {
   const navigation = useNavigation();
@@ -37,7 +41,14 @@ const ManualCheckin = () => {
   const [loading, setLoading] = useState(false);
   const [selectedGuest, setSelectedGuest] = useState(null);
   const [showspinner, setShowSpinner] = useState(false);
-  const [guests, setGuests] = useState([]);
+  const [allGuests, setAllGuests] = useState([]); // Store all guests
+  const [fetchError, setFetchError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     if (!route.params?.eventId) {
@@ -83,40 +94,116 @@ const ManualCheckin = () => {
     fetchGuest();
   }, []);
 
-  const fetchGuest = async () => {
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  const fetchGuest = async (showLoading = true) => {
     try {
-      setShowSpinner(true);
+      if (showLoading) {
+        setShowSpinner(true);
+      }
+      setFetchError(null);
       const token = await AsyncStorage.getItem('authToken');
       const response = await api.get(`${config.BASE_URL}/api/event-guest/${eventId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       });
-      setGuests(response.data);
+      setAllGuests(response.data);
+      // Calculate total pages based on filtered data
+      setTotalPages(Math.ceil(filterAndSortGuests(response.data, searchQuery).length / ITEMS_PER_PAGE));
     } catch (error) {
-      //console.error("Error fetching guest:", error);
-      const errormessage=error.response?.data?.message || 'Failed to fetch guests';
-      if(Platform.OS==='android'){
-        ToastAndroid.show(errormessage,ToastAndroid.SHORT);
-      }else{
-         Toast.show({
-        type: 'error',
-        text1: errormessage
-      });
+      let errorMessage = 'Failed to fetch event Guests. Please try again.';
+
+      if (error.response) {
+        errorMessage = error.response?.data?.message || 'Failed to fetch guests';
+      } else if (error.request) {
+        errorMessage = 'Unable to reach the server. Check your internet connection.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please try again.';
+      } else {
+        errorMessage = error.message;
+      }
+
+      setFetchError(errorMessage);
+
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage
+        });
       }
     } finally {
-      setShowSpinner(false);
+      if (showLoading) {
+        setShowSpinner(false);
+      }
+      setRefreshing(false);
+      setInitialLoad(false);
     }
   };
 
-  const filteredGuests = guests.filter(guest => {
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      guest.firstName.toLowerCase().includes(searchLower) ||
-      guest.lastName.toLowerCase().includes(searchLower) ||
-      guest.phoneNumber.includes(searchQuery)
-    );
-  });
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchGuest(false);
+    setCurrentPage(1);
+  };
+
+  // Filter and sort guests based on search query
+  const filterAndSortGuests = (guests, searchQuery) => {
+    if (!Array.isArray(guests)) return [];
+    
+    let filtered = guests.filter((guest) => {
+      if (!guest) return false;
+
+      const searchLower = (searchQuery || '').toLowerCase();
+
+      const firstName = guest.firstName?.toLowerCase() || '';
+      const lastName = guest.lastName?.toLowerCase() || '';
+      const phoneNumber = guest.phoneNumber || '';
+      const guestCode = guest.guestcode?.toLowerCase() || '';
+
+      return (
+        firstName.includes(searchLower) ||
+        lastName.includes(searchLower) ||
+        phoneNumber.includes(searchQuery || '') ||
+        guestCode.includes(searchLower)
+      );
+    });
+
+    // Sort guests: not checked in first, then by name
+    return filtered.sort((a, b) => {
+      // Show unchecked guests first
+      if (a.checkedIn !== b.checkedIn) {
+        return a.checkedIn ? 1 : -1;
+      }
+      // Then sort by name
+      const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+      const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+  };
+
+  // Get current page's guests
+  const getCurrentPageGuests = () => {
+    const filtered = filterAndSortGuests(allGuests, searchQuery);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filtered.slice(startIndex, endIndex);
+  };
+
+  const currentGuests = getCurrentPageGuests();
+  const totalFilteredGuests = filterAndSortGuests(allGuests, searchQuery).length;
+  const totalFilteredPages = Math.ceil(totalFilteredGuests / ITEMS_PER_PAGE);
+
+  // Update total pages when filtered guests change
+  useEffect(() => {
+    setTotalPages(totalFilteredPages);
+  }, [totalFilteredPages]);
 
   const handleSingleCheckin = async (guest) => {
     setLoading(true);
@@ -139,7 +226,8 @@ const ManualCheckin = () => {
         }
       );
 
-      const updatedGuests = guests.map((g) =>
+      // Update the guest in allGuests
+      const updatedAllGuests = allGuests.map((g) =>
         g.id === guest.id
           ? {
               ...g,
@@ -149,7 +237,7 @@ const ManualCheckin = () => {
           : g
       );
 
-      setGuests(updatedGuests);
+      setAllGuests(updatedAllGuests);
 
       Alert.alert(
         "Success",
@@ -157,8 +245,27 @@ const ManualCheckin = () => {
         [{ text: "OK" }]
       );
     } catch (error) {
-      const errormessage = error.response?.data?.message;
-      Alert.alert("Failed", errormessage || "Check-in failed");
+      let errorMessage = 'Failed to check in the Guest. Please try again.';
+
+      if (error.response) {
+        errorMessage = error.response?.data?.message || 'Failed To check in the Guest';
+      } else if (error.request) {
+        errorMessage = 'Unable to reach the server. Check your internet connection.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please try again.';
+      } else {
+        errorMessage = error.message;
+      }
+
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage
+        });
+      }
     } finally {
       setLoading(false);
       setSelectedGuest(null);
@@ -186,22 +293,41 @@ const ManualCheckin = () => {
         }
       );
 
-      const updatedGuests = guests.map(g =>
+      const updatedAllGuests = allGuests.map(g =>
         g.id === guest.id ? {
           ...g,
           remainedNumberOfScans: 1
         } : g
       );
 
-      setGuests(updatedGuests);
+      setAllGuests(updatedAllGuests);
       Alert.alert(
         'Success',
         `First attendee checked in for ${guest.firstName} ${guest.lastName}.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
-      const errormessage = error.response?.data?.message;
-      Alert.alert('Failed', errormessage || 'Failed to update first attendee status');
+      let errorMessage = 'Failed to Update First attendee status. Please try again.';
+
+      if (error.response) {
+        errorMessage = error.response?.data?.message || 'Failed to Update First attendee status. Please try again.';
+      } else if (error.request) {
+        errorMessage = 'Unable to reach the server. Check your internet connection.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please try again.';
+      } else {
+        errorMessage = error.message;
+      }
+
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage
+        });
+      }
     } finally {
       setLoading(false);
       setSelectedGuest(null);
@@ -226,10 +352,10 @@ const ManualCheckin = () => {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
-      const updatedGuests = guests.map(g =>
+      const updatedAllGuests = allGuests.map(g =>
         g.id === guest.id ? {
           ...g,
           checkedIn: true,
@@ -237,16 +363,34 @@ const ManualCheckin = () => {
         } : g
       );
 
-      setGuests(updatedGuests);
+      setAllGuests(updatedAllGuests);
       Alert.alert(
         'Success',
         `Second attendee checked in for ${guest.firstName} ${guest.lastName}.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
-      const errormessage = error.response?.data?.message;
-      Alert.alert('Failed', errormessage || 'Failed to update first attendee status');
-     // Alert.alert('Failed', 'Failed to update second attendee status');
+      let errorMessage = 'Failed to Update Second attendee status. Please try again.';
+
+      if (error.response) {
+        errorMessage = error.response?.data?.message || 'Failed to Update Second attendee status. Please try again.';
+      } else if (error.request) {
+        errorMessage = 'Unable to reach the server. Check your internet connection.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please try again.';
+      } else {
+        errorMessage = error.message;
+      }
+
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage
+        });
+      }
     } finally {
       setLoading(false);
       setSelectedGuest(null);
@@ -274,7 +418,7 @@ const ManualCheckin = () => {
         }
       );
 
-      const updatedGuests = guests.map(g =>
+      const updatedAllGuests = allGuests.map(g =>
         g.id === guest.id ? {
           ...g,
           checkedIn: true,
@@ -282,16 +426,34 @@ const ManualCheckin = () => {
         } : g
       );
 
-      setGuests(updatedGuests);
+      setAllGuests(updatedAllGuests);
       Alert.alert(
         'Success',
         `Both attendees checked in for ${guest.firstName} ${guest.lastName}.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
-      const errormessage = error.response?.data?.message;
-      Alert.alert('Failed', errormessage || 'Failed to update first attendee status');
-     // Alert.alert('Failed', 'Failed to update both attendees status');
+      let errorMessage = 'Failed to Update Both attendee status. Please try again.';
+
+      if (error.response) {
+        errorMessage = error.response?.data?.message || 'Failed to Update Both attendee status. Please try again.';
+      } else if (error.request) {
+        errorMessage = 'Unable to reach the server. Check your internet connection.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorMessage = 'Request timed out. Please try again.';
+      } else {
+        errorMessage = error.message;
+      }
+
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: errorMessage
+        });
+      }
     } finally {
       setLoading(false);
       setSelectedGuest(null);
@@ -302,7 +464,12 @@ const ManualCheckin = () => {
     if (guest.checkedIn || guest.remainedNumberOfScans === 0) {
       return (
         <Surface style={styles.statusContainer} elevation={0}>
-          <IconButton icon="check-circle" size={16} iconColor="#10B981" />
+          <IconButton 
+            icon="check-circle" 
+            size={16} 
+            iconColor="#333333"
+            style={styles.statusIcon}
+          />
           <Text variant="bodySmall" style={styles.checkedInText}>
             Checked In
           </Text>
@@ -317,8 +484,9 @@ const ManualCheckin = () => {
           onPress={() => handleSingleCheckin(guest)}
           loading={loading && selectedGuest === guest.id}
           disabled={loading && selectedGuest === guest.id}
-          style={[styles.actionButton, styles.singleButton]}
+          style={styles.actionButton}
           labelStyle={styles.actionButtonLabel}
+          contentStyle={styles.buttonContent}
           compact
         >
           Check In
@@ -335,8 +503,9 @@ const ManualCheckin = () => {
               onPress={() => handleDoubleFirstAttendee(guest)}
               loading={loading && selectedGuest === guest.id}
               disabled={loading && selectedGuest === guest.id}
-              style={[styles.actionButton, styles.firstButton]}
+              style={styles.actionButton}
               labelStyle={styles.actionButtonLabel}
+              contentStyle={styles.buttonContent}
               compact
             >
               Mark First
@@ -346,8 +515,9 @@ const ManualCheckin = () => {
               onPress={() => handleDoubleBothAttendees(guest)}
               loading={loading && selectedGuest === guest.id}
               disabled={loading && selectedGuest === guest.id}
-              style={[styles.actionButton, styles.bothButton]}
+              style={styles.actionButton}
               labelStyle={styles.actionButtonLabel}
+              contentStyle={styles.buttonContent}
               compact
             >
               Mark Both
@@ -361,8 +531,9 @@ const ManualCheckin = () => {
             onPress={() => handleDoubleSecondAttendee(guest)}
             loading={loading && selectedGuest === guest.id}
             disabled={loading && selectedGuest === guest.id}
-            style={[styles.actionButton, styles.secondButton]}
+            style={styles.actionButton}
             labelStyle={styles.actionButtonLabel}
+            contentStyle={styles.buttonContent}
             compact
           >
             Mark Second
@@ -375,29 +546,38 @@ const ManualCheckin = () => {
   };
 
   const renderGuestRow = (guest) => (
-    <Card 
-      style={[
-        styles.guestCard,
-        (guest.checkedIn || guest.remainedNumberOfScans === 0) && styles.checkedInCard
-      ]} 
-      mode="contained"
-    >
+    <Card style={styles.guestCard} mode="contained">
       <Card.Content style={styles.guestContent}>
         <Surface style={styles.guestRow} elevation={0}>
-          {/* Name */}
+          {/* Name and Guest Code */}
           <Surface style={[styles.guestCell, styles.nameCell]} elevation={0}>
             <Avatar.Text 
               size={32}
-              label={`${guest.firstName?.[0] || 'G'}${guest.lastName?.[0] || 'U'}`}
+              label={`${guest.firstName?.[0] || 'Guest'}${guest.lastName?.[0] || 'User'}`}
               style={styles.avatar}
+              labelStyle={styles.avatarText}
             />
             <Surface style={styles.nameInfo} elevation={0}>
               <Text variant="bodyLarge" style={styles.guestName}>
-                {guest.firstName} {guest.lastName}
+                {guest?.firstName ?? 'eCards'} {guest?.lastName?? 'Guest'}
               </Text>
               <Text variant="bodySmall" style={styles.phoneText}>
-                {guest.phoneNumber}
+                {guest?.phoneNumber?? '0626779507'}
               </Text>
+              {/* Display Guest Code */}
+              {guest.guestcode && (
+                <Surface style={styles.guestCodeContainer} elevation={0}>
+                  <IconButton 
+                    icon="ticket" 
+                    size={12} 
+                    iconColor="#666666"
+                    style={styles.codeIcon}
+                  />
+                  <Text variant="bodySmall" style={styles.guestCodeText}>
+                    {guest.guestcode}
+                  </Text>
+                </Surface>
+              )}
             </Surface>
           </Surface>
 
@@ -406,24 +586,11 @@ const ManualCheckin = () => {
             <Chip
               mode="outlined"
               compact
-              style={[
-                styles.typeChip,
-                guest.type === 'double' ? styles.doubleChip : styles.singleChip
-              ]}
+              style={styles.typeChip}
               textStyle={styles.typeText}
             >
-              {guest.type.toUpperCase()}
+              {guest.type?.toUpperCase() || 'GUEST'}
             </Chip>
-          </Surface>
-
-          {/* Remaining Scans */}
-          <Surface style={[styles.guestCell, styles.scansCell]} elevation={0}>
-            <Badge 
-              size={24} 
-              style={styles.scansBadge}
-            >
-              {guest.remainedNumberOfScans}
-            </Badge>
           </Surface>
 
           {/* Action */}
@@ -435,14 +602,65 @@ const ManualCheckin = () => {
     </Card>
   );
 
-  if (showspinner) {
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
     return (
-      <Surface style={styles.loadingContainer} elevation={0}>
-        <ActivityIndicator size="small" />
-        <Text variant="bodyLarge" style={styles.loadingText}>
-          Loading...
-        </Text>
+      <Surface style={styles.paginationContainer} elevation={0}>
+        <TouchableOpacity
+          onPress={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+          disabled={currentPage === 1}
+          style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+        >
+          <IconButton
+            icon="chevron-left"
+            size={20}
+            iconColor={currentPage === 1 ? "#CCCCCC" : "#333333"}
+            style={styles.paginationIcon}
+          />
+        </TouchableOpacity>
+        
+        <Surface style={styles.pageInfo} elevation={0}>
+          <Text variant="bodyMedium" style={styles.pageText}>
+            Page {currentPage} of {totalPages}
+          </Text>
+          <Text variant="bodySmall" style={styles.totalText}>
+            ({totalFilteredGuests} total guests)
+          </Text>
+        </Surface>
+        
+        <TouchableOpacity
+          onPress={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+          disabled={currentPage === totalPages}
+          style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
+        >
+          <IconButton
+            icon="chevron-right"
+            size={20}
+            iconColor={currentPage === totalPages ? "#CCCCCC" : "#333333"}
+            style={styles.paginationIcon}
+          />
+        </TouchableOpacity>
       </Surface>
+    );
+  };
+
+  // Show loading spinner only during initial load
+  if (showspinner && initialLoad) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar 
+          barStyle="dark-content" 
+          backgroundColor="#ffffff"
+          translucent={false}
+        />
+        <Surface style={styles.loadingContainer} elevation={0}>
+          <ActivityIndicator size="small" color="#333333" />
+          <Text variant="bodyLarge" style={styles.loadingText}>
+            Loading guests...
+          </Text>
+        </Surface>
+      </SafeAreaView>
     );
   }
 
@@ -450,79 +668,138 @@ const ManualCheckin = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar 
         barStyle="dark-content" 
-        backgroundColor="#f8f9fa"
+        backgroundColor="#ffffff"
         translucent={false}
       />
       
       {/* Header */}
-      <Card style={styles.headerCard} mode="contained">
-        <Card.Content style={styles.headerContent}>
-          <Surface style={styles.headerRow} elevation={0}>
-            <IconButton 
-              icon="arrow-left" 
-              size={24} 
-              onPress={() => navigation.goBack()}
-            />
-            <Surface style={styles.headerInfo} elevation={0}>
-              <Text variant="headlineSmall" style={styles.headerTitle}>
-                Manual Check-in
-              </Text>
-              <Text variant="bodyMedium" style={styles.eventName} numberOfLines={1}>
-                {eventName || 'Event'}
-              </Text>
-            </Surface>
-          </Surface>
-        </Card.Content>
-      </Card>
+      <Surface style={styles.header} elevation={0}>
+        <IconButton
+          icon="arrow-left"
+          size={24}
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        />
+        <Surface style={styles.headerInfo} elevation={0}>
+          <Text variant="headlineSmall" style={styles.headerTitle}>
+            Manual Check-in
+          </Text>
+          <Text variant="bodyMedium" style={styles.eventName} numberOfLines={1}>
+            {eventName || 'Event'}
+          </Text>
+        </Surface>
+      </Surface>
 
       {/* Search Bar */}
-      <Surface style={styles.searchContainer} elevation={0}>
-        <Searchbar
-          placeholder="Search by name or phone number..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          style={styles.searchBar}
-          iconColor="#666"
-        />
-      </Surface>
-
-      {/* Results Count */}
-      <Surface style={styles.resultsContainer} elevation={0}>
-        <Text variant="bodyMedium" style={styles.resultsText}>
-          {filteredGuests.length} guest{filteredGuests.length !== 1 ? 's' : ''} found
-        </Text>
-      </Surface>
-
-      {/* Table Header */}
-      <Card style={styles.tableHeaderCard} mode="contained">
-        <Card.Content style={styles.tableHeaderContent}>
-          <Surface style={styles.tableHeader} elevation={0}>
-            <Text variant="labelSmall" style={styles.headerText}>Guest</Text>
-            <Text variant="labelSmall" style={styles.headerText}>Type</Text>
-            <Text variant="labelSmall" style={styles.headerText}>Remaining</Text>
-            <Text variant="labelSmall" style={styles.headerText}>Action</Text>
+      <Card style={styles.formContainer} mode="contained">
+        <Card.Content style={styles.cardContent}>
+          <Searchbar
+            placeholder="Search by name, phone number, or guest code..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={styles.searchBar}
+            iconColor="#666666"
+            mode="outlined"
+          />
+          
+          <Surface style={styles.resultsContainer} elevation={0}>
+            <Text variant="bodyMedium" style={styles.resultsText}>
+              {totalFilteredGuests} guest{totalFilteredGuests !== 1 ? 's' : ''} found
+              {searchQuery && ` for "${searchQuery}"`}
+            </Text>
           </Surface>
         </Card.Content>
       </Card>
 
-      {/* Guests List */}
-      <ScrollView style={styles.tableContainer}>
-        {filteredGuests.length > 0 ? (
-          filteredGuests.map(guest => (
-            <Surface key={guest.id} elevation={0}>
-              {renderGuestRow(guest)}
-              <Divider />
-            </Surface>
-          ))
-        ) : (
-          <Card style={styles.emptyCard} mode="contained">
+      {/* Table Header */}
+      <Card style={styles.formContainer} mode="contained">
+        <Card.Content style={styles.tableHeaderContent}>
+          <Surface style={styles.tableHeader} elevation={0}>
+            <Text variant="labelSmall" style={styles.headerText}>GUEST</Text>
+            <Text variant="labelSmall" style={styles.headerText}>TYPE</Text>
+            <Text variant="labelSmall" style={styles.headerText}>ACTION</Text>
+          </Surface>
+        </Card.Content>
+      </Card>
+
+      {/* Guests List with Pull to Refresh */}
+      <ScrollView
+        style={styles.tableContainer}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#333333']}
+            tintColor="#333333"
+          />
+        }
+      >
+        {/* Show error state with retry button */}
+        {fetchError && !initialLoad && (
+          <Card style={styles.formContainer} mode="contained">
+            <Card.Content style={styles.errorContent}>
+              <Surface style={styles.errorIconContainer} elevation={0}>
+                <IconButton
+                  icon="wifi-off"
+                  size={64}
+                  iconColor="#333333"
+                  style={styles.errorIcon}
+                />
+              </Surface>
+              <Text variant="titleMedium" style={styles.errorText}>
+                Connection Error
+              </Text>
+              <Text variant="bodyMedium" style={styles.errorSubtext}>
+                {fetchError}
+              </Text>
+              <Button
+                mode="contained"
+                onPress={() => fetchGuest()}
+                style={styles.retryButton}
+                labelStyle={styles.retryButtonLabel}
+                icon="refresh"
+              >
+                Retry
+              </Button>
+            </Card.Content>
+          </Card>
+        )}
+
+        {/* Show guests if loaded successfully */}
+        {!fetchError && currentGuests.length > 0 && (
+          <>
+            {currentGuests.map((guest, index) => (
+              <React.Fragment key={guest?.id ?? index}>
+                {renderGuestRow(guest)}
+                <Divider style={styles.divider} />
+              </React.Fragment>
+            ))}
+            
+            {/* Pagination Controls */}
+            {renderPagination()}
+          </>
+        )}
+
+        {/* Show empty state only when not loading and no guests */}
+        {!fetchError && currentGuests.length === 0 && !initialLoad && (
+          <Card style={styles.formContainer} mode="contained">
             <Card.Content style={styles.emptyContent}>
-              <IconButton icon="account-group" size={64} iconColor="#c2c2c2" />
+              <Surface style={styles.emptyIconContainer} elevation={0}>
+                <IconButton
+                  icon="account-group"
+                  size={64}
+                  iconColor="#666666"
+                  style={styles.emptyIcon}
+                />
+              </Surface>
               <Text variant="titleMedium" style={styles.emptyStateText}>
                 {searchQuery ? 'No guests found' : 'No guests available'}
               </Text>
               <Text variant="bodyMedium" style={styles.emptyStateSubtext}>
-                {searchQuery ? 'Try adjusting your search terms' : 'Guests will appear here once added to the event'}
+                {searchQuery
+                  ? 'Try adjusting your search terms'
+                  : 'Guests will appear here once added to the event'}
               </Text>
             </Card.Content>
           </Card>
@@ -532,8 +809,12 @@ const ManualCheckin = () => {
   );
 };
 
-const styles = {
+const styles = StyleSheet.create({
   safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  container: {
     flex: 1,
     backgroundColor: '#ffffff',
   },
@@ -544,55 +825,56 @@ const styles = {
     backgroundColor: '#ffffff',
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: 16,
+    color: '#333333',
   },
-  headerCard: {
-    margin: 16,
-    marginBottom: 8,
-  },
-  headerContent: {
-    paddingVertical: 8,
-  },
-  headerRow: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    marginBottom: 20,
+    marginTop: 0,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    backgroundColor: '#ffffff',
+  },
+  backButton: {
+    marginRight: 8,
   },
   headerInfo: {
     flex: 1,
-    marginLeft: 8,
     backgroundColor: 'transparent',
   },
   headerTitle: {
+    color: '#333333',
     fontWeight: 'bold',
   },
   eventName: {
-    color: '#666',
+    color: '#666666',
   },
-  searchContainer: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: 'transparent',
+  formContainer: {
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+  cardContent: {
+    paddingVertical: 20,
   },
   searchBar: {
+    backgroundColor: '#ffffff',
     elevation: 0,
-    backgroundColor: '#f8f8f8',
   },
   resultsContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 8,
+    marginTop: 16,
     backgroundColor: 'transparent',
   },
   resultsText: {
-    color: '#666',
+    color: '#666666',
     fontWeight: '500',
   },
-  tableHeaderCard: {
-    marginHorizontal: 16,
-    marginBottom: 8,
-  },
   tableHeaderContent: {
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -602,21 +884,24 @@ const styles = {
   },
   headerText: {
     fontWeight: 'bold',
-    color: '#374151',
+    color: '#333333',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   tableContainer: {
     flex: 1,
-    marginHorizontal: 16,
+    marginHorizontal: 20,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   guestCard: {
     marginBottom: 8,
-  },
-  checkedInCard: {
-    backgroundColor: '#f0f9ff',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
   },
   guestContent: {
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
   guestRow: {
     flexDirection: 'row',
@@ -637,17 +922,16 @@ const styles = {
     flex: 1,
     alignItems: 'center',
   },
-  scansCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
   actionCell: {
     flex: 1.5,
     alignItems: 'center',
   },
   avatar: {
-    backgroundColor: '#dbeafe',
-    marginRight: 8,
+    backgroundColor: '#f5f5f5',
+    marginRight: 12,
+  },
+  avatarText: {
+    color: '#333333',
   },
   nameInfo: {
     flex: 1,
@@ -655,79 +939,172 @@ const styles = {
   },
   guestName: {
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: '#333333',
+    marginBottom: 2,
   },
   phoneText: {
-    color: '#4b5563',
+    color: '#666666',
+  },
+  guestCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+  codeIcon: {
+    margin: 0,
+    padding: 0,
+    width: 16,
+    height: 16,
+  },
+  guestCodeText: {
+    color: '#888888',
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginLeft: 4,
   },
   typeChip: {
     height: 30,
-  },
-  singleChip: {
-    backgroundColor: '#dbeafe',
-  },
-  doubleChip: {
-    backgroundColor: '#f3e8ff',
+    backgroundColor: '#f5f5f5',
+    borderWidth: 0,
   },
   typeText: {
     fontSize: 10,
     fontWeight: '700',
-  },
-  scansBadge: {
-    backgroundColor: '#3B82F6',
+    color: '#333333',
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'transparent',
   },
+  statusIcon: {
+    backgroundColor: '#f5f5f5',
+  },
   checkedInText: {
     fontWeight: '600',
-    color: '#10B981',
+    color: '#333333',
+    marginLeft: 4,
   },
   actionButton: {
-    margin: 0,
-    paddingHorizontal: 8,
-  },
-  singleButton: {
-    backgroundColor: '#10B981',
-  },
-  firstButton: {
-    backgroundColor: '#F59E0B',
-  },
-  secondButton: {
-    backgroundColor: '#8B5CF6',
-  },
-  bothButton: {
-    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    backgroundColor: '#000000',
   },
   actionButtonLabel: {
     fontSize: 12,
-    marginHorizontal: 4,
+    color: '#ffffff',
+  },
+  buttonContent: {
+    paddingVertical: 4,
   },
   doubleButtonsContainer: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 8,
     backgroundColor: 'transparent',
   },
-  emptyCard: {
-    marginTop: 20,
+  divider: {
+    marginVertical: 8,
+    backgroundColor: '#f0f0f0',
   },
   emptyContent: {
     alignItems: 'center',
     paddingVertical: 40,
   },
+  emptyIconContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    backgroundColor: '#ffffff',
+  },
+  emptyIcon: {
+    backgroundColor: '#f5f5f5',
+    width: 80,
+    height: 80,
+  },
   emptyStateText: {
-    color: '#4a4a4a',
+    color: '#333333',
     marginTop: 15,
     marginBottom: 5,
     textAlign: 'center',
     fontWeight: '600',
   },
   emptyStateSubtext: {
-    color: '#8a8d97',
+    color: '#666666',
     textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
   },
-};
+  errorContent: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  errorIconContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    backgroundColor: '#ffffff',
+  },
+  errorIcon: {
+    backgroundColor: '#f5f5f5',
+    width: 80,
+    height: 80,
+  },
+  errorText: {
+    color: '#333333',
+    marginTop: 15,
+    marginBottom: 5,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  errorSubtext: {
+    color: '#666666',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  retryButton: {
+    marginTop: 10,
+    borderRadius: 8,
+    backgroundColor: '#000000',
+    borderColor: '#000000',
+  },
+  retryButtonLabel: {
+    fontSize: 14,
+    color: '#ffffff',
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+    marginTop: 10,
+    backgroundColor: 'transparent',
+  },
+  paginationButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    marginHorizontal: 8,
+  },
+  paginationButtonDisabled: {
+    backgroundColor: '#fafafa',
+    opacity: 0.5,
+  },
+  paginationIcon: {
+    margin: 0,
+    padding: 0,
+  },
+  pageInfo: {
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    marginHorizontal: 16,
+  },
+  pageText: {
+    fontWeight: '600',
+    color: '#333333',
+  },
+  totalText: {
+    color: '#666666',
+    marginTop: 2,
+  },
+});
 
 export default ManualCheckin;

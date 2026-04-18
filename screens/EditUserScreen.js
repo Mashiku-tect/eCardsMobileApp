@@ -4,9 +4,13 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
-  StatusBar
+  StatusBar,
+  StyleSheet,
+  Keyboard,
+  Platform,
+  ToastAndroid
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Text,
   TextInput,
@@ -21,12 +25,14 @@ import {
   Divider,
   Portal,
   Dialog,
-  Paragraph
+  Paragraph,
+  
 } from 'react-native-paper';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import config from './config';
+import Toast from 'react-native-toast-message';
 import api from '../utils/api';
 
 const EditScreen = ({ route, navigation }) => {
@@ -43,12 +49,26 @@ const EditScreen = ({ route, navigation }) => {
   });
   const [errors, setErrors] = useState({});
 
+  // Validation functions
+  const validateName = (name) => {
+    return /^[A-Za-z]+(?:[ ][A-Za-z]+)*$/.test(name.trim());
+  };
+
+  const validateEmail = (email) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email.trim());
+  };
+
+  const validatePhone = (phone) => {
+    const cleaned = phone.replace(/\D/g, '');
+    return /^(06|07)\d{8}$/.test(cleaned);
+  };
+
   const handleInputChange = (field, value) => {
     setUserData(prev => ({
       ...prev,
       [field]: value,
     }));
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
@@ -68,7 +88,16 @@ const EditScreen = ({ route, navigation }) => {
       setLoading(true);
       const token = await AsyncStorage.getItem('authToken');
       if (!token) {
-        Alert.alert('Error', 'Authentication required');
+        //Alert.alert('Error', 'Authentication required');
+        if(Platform.OS==='android'){
+          ToastAndroid.show('Authentication required',ToastAndroid.LONG)
+        }
+        else{
+          Toast.show({
+            type:'error',
+            text1:'Authentication required'
+          })
+        }
         navigation.goBack();
         return;
       }
@@ -86,15 +115,39 @@ const EditScreen = ({ route, navigation }) => {
         role: capitalize(userData.role) || 'Tenant',
         status: capitalize(userData.status) || 'Active',
       });
-    } catch (error) {
-      const errorMessage = error.response?.data?.message || 'Failed to load user data';
-      if (error.response?.status === 401) {
-        await AsyncStorage.removeItem('authToken');
-        navigation.navigate('Login');
-      }
-      Alert.alert('Error', errorMessage);
-      navigation.goBack();
-    } finally {
+    }
+    // } catch (error) {
+    //   const errorMessage = error.response?.data?.message || 'Failed to load user data';
+      
+    //   Alert.alert('Error', errorMessage);
+    //   navigation.goBack();
+    // }
+    catch (error) {
+  let errorMessage = 'Failed to fetch event. Please try again.';
+
+  if (error.response) {
+    errorMessage = error.response?.data?.message || 'Failed to load user data';
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
+  navigation.goBack();
+}
+
+     finally {
       setLoading(false);
     }
   };
@@ -104,20 +157,26 @@ const EditScreen = ({ route, navigation }) => {
     
     if (!userData.firstName.trim()) {
       newErrors.firstName = 'First name is required';
+    } else if (!validateName(userData.firstName)) {
+      newErrors.firstName = 'First name can only contain letters and spaces';
     }
     
     if (!userData.lastName.trim()) {
       newErrors.lastName = 'Last name is required';
+    } else if (!validateName(userData.lastName)) {
+      newErrors.lastName = 'Last name can only contain letters and spaces';
     }
     
     if (!userData.email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!isValidEmail(userData.email)) {
-      newErrors.email = 'Please enter a valid email';
+    } else if (!validateEmail(userData.email)) {
+      newErrors.email = 'Please enter a valid email address';
     }
     
     if (!userData.phoneNumber.trim()) {
       newErrors.phoneNumber = 'Phone number is required';
+    } else if (!validatePhone(userData.phoneNumber)) {
+      newErrors.phoneNumber = 'Phone must be in format: 06XXXXXXXX or 07XXXXXXXX';
     }
     
     setErrors(newErrors);
@@ -129,17 +188,34 @@ const EditScreen = ({ route, navigation }) => {
       return;
     }
 
+    // Dismiss keyboard before showing loading
+    Keyboard.dismiss();
+    
     setSubmitting(true);
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) {
-        Alert.alert('Error', 'Authentication required');
+        if(Platform.OS==='android'){
+          ToastAndroid.show('Authentication Required',ToastAndroid.LONG)
+        }
+        else{
+          Toast.show({
+            type:'error',
+            text1:'Authentication Required'
+          })
+        }
+       // Alert.alert('Error', 'Authentication required');
         return;
       }
 
+      const formattedData = {
+        ...userData,
+        phoneNumber: userData.phoneNumber.replace(/\D/g, '')
+      };
+
       const response = await api.put(
         `${config.BASE_URL}/api/users/update/${userId}`,
-        userData,
+        formattedData,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -147,29 +223,69 @@ const EditScreen = ({ route, navigation }) => {
           },
         }
       );
-
-      Alert.alert('Success', response.data.message);
+       const responsemessage=response.data.message || 'User Updated Successfully';
+     // Alert.alert('Success', response.data.message);
+     if(Platform.OS==='android'){
+ToastAndroid.show(responsemessage,ToastAndroid.LONG)
+     }
+     else{
+      Toast.show({
+        type:'success',
+        text1:responsemessage
+      })
+     }
+     
       navigation.goBack();
-    } catch (error) {
-      Alert.alert('Error', error.response?.data?.message || 'Failed to update user');
-    } finally {
+    // } catch (error) {
+    //   Alert.alert('Error', error.response?.data?.message || 'Failed to update user');
+    // } 
+    }
+    catch (error) {
+  let errorMessage = 'Failed to fetch event. Please try again.';
+
+  if (error.response) {
+    const status = error.response.status;
+    const data = error.response.data;
+
+    errorMessage =error.response?.data?.message || 'Failed to update user';
+     
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
+}
+
+    
+    finally {
       setSubmitting(false);
     }
   };
 
-  const isValidEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
-
   const formatPhoneNumber = (text) => {
     const cleaned = text.replace(/\D/g, '');
-    if (cleaned.length <= 3) {
-      return cleaned;
-    } else if (cleaned.length <= 6) {
-      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
+    const limited = cleaned.slice(0, 10);
+    
+    if (limited.length <= 2) {
+      return limited;
+    } else if (limited.length <= 5) {
+      return `${limited.slice(0, 2)} ${limited.slice(2)}`;
+    } else if (limited.length <= 8) {
+      return `${limited.slice(0, 2)} ${limited.slice(2, 5)} ${limited.slice(5)}`;
     } else {
-      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+      return `${limited.slice(0, 2)} ${limited.slice(2, 5)} ${limited.slice(5, 8)} ${limited.slice(8)}`;
     }
   };
 
@@ -178,14 +294,19 @@ const EditScreen = ({ route, navigation }) => {
     handleInputChange('phoneNumber', formatted);
   };
 
+  const handleNameChange = (field, text) => {
+    const filtered = text.replace(/[^A-Za-z ]/g, '');
+    handleInputChange(field, filtered);
+  };
+
   const getStatusChip = (status) => {
     const statusConfig = {
-      Active: { icon: 'check-circle', color: '#4caf50', label: 'Active' },
-      Pending: { icon: 'clock', color: '#ff9800', label: 'Pending' },
-      Suspended: { icon: 'alert-circle', color: '#f44336', label: 'Suspended' }
+      Active: { icon: 'check-circle', color: '#666666', label: 'Active' },
+      Pending: { icon: 'clock', color: '#999999', label: 'Pending' },
+      Suspended: { icon: 'alert-circle', color: '#999999', label: 'Suspended' }
     };
     
-    const config = statusConfig[status] || { icon: 'help-circle', color: '#9e9e9e', label: status };
+    const config = statusConfig[status] || { icon: 'help-circle', color: '#999999', label: status };
     
     return (
       <Chip
@@ -193,7 +314,9 @@ const EditScreen = ({ route, navigation }) => {
         icon={config.icon}
         mode={userData.status === status ? 'contained' : 'outlined'}
         onPress={() => handleInputChange('status', status)}
-        style={{ marginHorizontal: 4 }}
+        style={[styles.statusChip, userData.status === status ? styles.selectedChip : styles.unselectedChip]}
+        textStyle={[styles.chipText, userData.status === status ? styles.selectedChipText : styles.unselectedChipText]}
+        disabled={submitting}
       >
         {config.label}
       </Chip>
@@ -202,12 +325,12 @@ const EditScreen = ({ route, navigation }) => {
 
   const getRoleChip = (role) => {
     const roleConfig = {
-      Tenant: { icon: 'account', color: '#2196f3', label: 'Tenant' },
-      Boss: { icon: 'crown', color: '#ff9800', label: 'Boss' },
-      Admin: { icon: 'shield-account', color: '#4caf50', label: 'Admin' }
+      Tenant: { icon: 'account', color: '#666666', label: 'Tenant' },
+      Boss: { icon: 'crown', color: '#666666', label: 'Boss' },
+      Admin: { icon: 'shield-account', color: '#666666', label: 'Admin' }
     };
     
-    const config = roleConfig[role] || { icon: 'account', color: '#9e9e9e', label: role };
+    const config = roleConfig[role] || { icon: 'account', color: '#999999', label: role };
     
     return (
       <Chip
@@ -215,7 +338,9 @@ const EditScreen = ({ route, navigation }) => {
         icon={config.icon}
         mode={userData.role === role ? 'contained' : 'outlined'}
         onPress={() => handleInputChange('role', role)}
-        style={{ marginHorizontal: 4 }}
+        style={[styles.roleChip, userData.role === role ? styles.selectedChip : styles.unselectedChip]}
+        textStyle={[styles.chipText, userData.role === role ? styles.selectedChipText : styles.unselectedChipText]}
+        disabled={submitting}
       >
         {config.label}
       </Chip>
@@ -224,154 +349,409 @@ const EditScreen = ({ route, navigation }) => {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#6200ee" />
-          <Text style={{ marginTop: 16 }}>Loading user data...</Text>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator 
+            animating={true} 
+            size="large" 
+            color="#000000"
+            style={styles.spinner}
+          />
+          <Text style={styles.loadingTitle}>Loading User Data</Text>
+          <Text style={styles.loadingSubtitle}>Please wait while we fetch user information...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Card style={{ marginBottom: 16 }}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Main Form Card */}
+        <Card style={styles.formCard} mode="contained">
           <Card.Content>
-            <Title style={{ textAlign: 'center', marginBottom: 24 }}>Edit User</Title>
+            <Text variant="titleLarge" style={styles.formTitle}>Edit User</Text>
             
             {/* User Info */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
+            <Surface style={styles.userInfoContainer} elevation={0}>
               <Avatar.Image 
                 size={64} 
                 source={require('../assets/user.png')}
-                style={{ marginRight: 16 }}
+                style={styles.userAvatar}
               />
-              <View>
-                <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
-                  {userData.firstName} {userData.lastName}
+              <Surface style={styles.userInfoText} elevation={0}>
+                <Text variant="bodyLarge" style={styles.userName}>
+                  {userData?.firstName ?? 'eCards'} {userData?.lastName?? 'User'}
                 </Text>
-                {/* <Text variant="bodyMedium" style={{ color: '#666' }}>ID: {userId}</Text> */}
-              </View>
-            </View>
+              </Surface>
+            </Surface>
 
-            <Divider style={{ marginBottom: 24 }} />
+            <Divider style={styles.divider} />
 
             {/* Personal Information */}
-            <Title style={{ marginBottom: 16 }}>Personal Information</Title>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Personal Information</Text>
             
-            <View style={{ flexDirection: 'row', marginBottom: 16 }}>
+            <Surface style={styles.nameRow} elevation={0}>
               <TextInput
                 label="First Name *"
                 mode="outlined"
-                value={userData.firstName}
-                onChangeText={(text) => handleInputChange('firstName', text)}
-                style={{ flex: 1, marginRight: 8 }}
+                value={userData?.firstName?? 'eCards'}
+                onChangeText={(text) => handleNameChange('firstName', text)}
+                style={styles.firstNameInput}
                 error={!!errors.firstName}
+                autoCapitalize="words"
+                returnKeyType="next"
+                maxLength={30}
+                disabled={submitting}
               />
               <TextInput
                 label="Last Name *"
                 mode="outlined"
-                value={userData.lastName}
-                onChangeText={(text) => handleInputChange('lastName', text)}
-                style={{ flex: 1 }}
+                value={userData?.lastName ?? 'User'}
+                onChangeText={(text) => handleNameChange('lastName', text)}
+                style={styles.lastNameInput}
                 error={!!errors.lastName}
+                autoCapitalize="words"
+                returnKeyType="next"
+                maxLength={30}
+                disabled={submitting}
               />
-            </View>
+            </Surface>
 
-            {errors.firstName && <HelperText type="error" visible>{errors.firstName}</HelperText>}
-            {errors.lastName && <HelperText type="error" visible>{errors.lastName}</HelperText>}
+            {errors.firstName && <HelperText type="error" visible style={styles.errorText}>{errors.firstName}</HelperText>}
+            {errors.lastName && <HelperText type="error" visible style={styles.errorText}>{errors.lastName}</HelperText>}
 
             <TextInput
               label="Email *"
               mode="outlined"
-              value={userData.email}
+              value={userData?.email?? 'ecardsuser@mashikutech.co.tz'}
               onChangeText={(text) => handleInputChange('email', text)}
               keyboardType="email-address"
               autoCapitalize="none"
-              style={{ marginBottom: 8 }}
+              style={styles.input}
               error={!!errors.email}
+              returnKeyType="next"
+              disabled={submitting}
             />
-            {errors.email && <HelperText type="error" visible>{errors.email}</HelperText>}
+            {errors.email && <HelperText type="error" visible style={styles.errorText}>{errors.email}</HelperText>}
 
             <TextInput
               label="Phone Number *"
               mode="outlined"
-              value={userData.phoneNumber}
+              value={userData?.phoneNumber?? '07XXXXXXX'}
               onChangeText={handlePhoneChange}
               keyboardType="phone-pad"
               maxLength={14}
-              style={{ marginBottom: 8 }}
+              style={styles.input}
               error={!!errors.phoneNumber}
+              returnKeyType="next"
+              placeholder="06 123 456 78"
+              disabled={submitting}
             />
-            {errors.phoneNumber && <HelperText type="error" visible>{errors.phoneNumber}</HelperText>}
+            {errors.phoneNumber && (
+              <HelperText type="error" visible style={styles.errorText}>
+                {errors.phoneNumber}
+              </HelperText>
+            )}
+
+            {/* Validation Notes */}
+            <Surface style={styles.validationNotes} elevation={0}>
+              <Text style={styles.validationTitle}>Format Requirements:</Text>
+              <Text style={styles.validationText}>• Names: Letters and spaces only</Text>
+              <Text style={styles.validationText}>• Phone: Must start with 06 or 07, 10 digits total</Text>
+            </Surface>
           </Card.Content>
         </Card>
 
         {/* Role Selection */}
-        <Card style={{ marginBottom: 16 }}>
+        <Card style={styles.selectionCard} mode="contained">
           <Card.Content>
-            <Title style={{ marginBottom: 16 }}>Role</Title>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Role</Text>
+            <Surface style={styles.chipContainer} elevation={0}>
               {['Tenant', 'Boss'].map(role => getRoleChip(role))}
-            </View>
+            </Surface>
           </Card.Content>
         </Card>
 
         {/* Status Selection */}
-        <Card style={{ marginBottom: 16 }}>
+        <Card style={styles.selectionCard} mode="contained">
           <Card.Content>
-            <Title style={{ marginBottom: 16 }}>Status</Title>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
+            <Text variant="titleMedium" style={styles.sectionTitle}>Status</Text>
+            <Surface style={styles.chipContainer} elevation={0}>
               {['Active', 'Pending', 'Suspended'].map(status => getStatusChip(status))}
-            </View>
+            </Surface>
           </Card.Content>
         </Card>
 
         {/* Current Values Display */}
-        <Surface style={{ borderRadius: 8, padding: 16, marginBottom: 16, elevation: 2 }}>
-          <Title style={{ marginBottom: 12 }}>Current Selection</Title>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Text>Role:</Text>
-            <Chip mode="outlined" icon={userData.role === 'Tenant' ? 'account' : 'crown'}>
-              {userData.role}
+        <Surface style={styles.currentValuesCard} elevation={1}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Current Selection</Text>
+          <Surface style={styles.currentValueRow} elevation={0}>
+            <Text style={styles.currentValueLabel}>Role:</Text>
+            <Chip 
+              mode="outlined" 
+              icon={userData.role === 'Tenant' ? 'account' : 'crown'}
+              style={styles.currentValueChip}
+              textStyle={styles.currentValueChipText}
+            >
+              {userData?.role?? 'Tenant'}
             </Chip>
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text>Status:</Text>
-            <Chip mode="outlined" icon={userData.status === 'Active' ? 'check-circle' : userData.status === 'Pending' ? 'clock' : 'alert-circle'}>
-              {userData.status}
+          </Surface>
+          <Surface style={styles.currentValueRow} elevation={0}>
+            <Text style={styles.currentValueLabel}>Status:</Text>
+            <Chip 
+              mode="outlined" 
+              icon={userData.status === 'Active' ? 'check-circle' : userData.status === 'Pending' ? 'clock' : 'alert-circle'}
+              style={styles.currentValueChip}
+              textStyle={styles.currentValueChipText}
+            >
+              {userData?.status?? 'Active'}
             </Chip>
-          </View>
+          </Surface>
         </Surface>
 
         {/* Action Buttons */}
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: 32 }}>
+        <Surface style={styles.actionButtons} elevation={0}>
           <Button
             mode="outlined"
             onPress={() => navigation.goBack()}
-            style={{ flex: 1 }}
-            icon="arrow-left"
+            style={styles.cancelButton}
+            textColor="#333333"
+            disabled={submitting}
           >
             Cancel
           </Button>
           <Button
             mode="contained"
             onPress={handleSave}
-            loading={submitting}
             disabled={submitting}
-            style={{ flex: 1 }}
-            icon="content-save"
+            style={styles.saveButton}
+            icon={submitting ? "" : "content-save"}
+            contentStyle={styles.buttonContent}
           >
-            {submitting ? 'Saving...' : 'Save Changes'}
+            {submitting ? (
+              <View style={styles.buttonLoadingContent}>
+                <ActivityIndicator size="small" color="#ffffff" style={styles.buttonSpinner} />
+                <Text style={styles.buttonLoadingText}>Saving Changes...</Text>
+              </View>
+            ) : (
+              'Save Changes'
+            )}
           </Button>
-        </View>
+        </Surface>
       </ScrollView>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  // Updated loading container for initial data fetch
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#ffffff',
+  },
+  spinner: {
+    marginBottom: 24,
+  },
+  loadingTitle: {
+    color: '#000000',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  loadingSubtitle: {
+    color: '#666666',
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 300,
+  },
+  scrollContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  formCard: {
+    marginBottom: 20,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
+  },
+  formTitle: {
+    textAlign: 'center',
+    marginBottom: 24,
+    color: '#000000',
+    fontWeight: 'bold',
+    fontSize: 24,
+  },
+  userInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    backgroundColor: 'transparent',
+  },
+  userAvatar: {
+    marginRight: 16,
+  },
+  userInfoText: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  userName: {
+    fontWeight: 'bold',
+    color: '#000000',
+    fontSize: 18,
+  },
+  divider: {
+    backgroundColor: '#f0f0f0',
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    marginBottom: 16,
+    color: '#000000',
+    fontWeight: '600',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    backgroundColor: 'transparent',
+    gap: 12,
+  },
+  firstNameInput: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  lastNameInput: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  input: {
+    marginBottom: 8,
+    backgroundColor: '#ffffff',
+  },
+  errorText: {
+    marginBottom: 12,
+  },
+  validationNotes: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+  },
+  validationTitle: {
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#666666',
+    fontSize: 14,
+  },
+  validationText: {
+    color: '#666666',
+    fontSize: 12,
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  selectionCard: {
+    marginBottom: 20,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
+    backgroundColor: 'transparent',
+  },
+  roleChip: {
+    marginHorizontal: 0,
+  },
+  statusChip: {
+    marginHorizontal: 0,
+  },
+  selectedChip: {
+    backgroundColor: '#000000',
+    borderColor: '#000000',
+  },
+  unselectedChip: {
+    backgroundColor: 'transparent',
+    borderColor: '#e0e0e0',
+  },
+  chipText: {
+    fontSize: 14,
+  },
+  selectedChipText: {
+    color: '#ffffff',
+  },
+  unselectedChipText: {
+    color: '#666666',
+  },
+  currentValuesCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    backgroundColor: '#f9f9f9',
+  },
+  currentValueRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    backgroundColor: 'transparent',
+  },
+  currentValueLabel: {
+    color: '#000000',
+  },
+  currentValueChip: {
+    backgroundColor: 'transparent',
+    borderColor: '#e0e0e0',
+  },
+  currentValueChipText: {
+    color: '#666666',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 32,
+    backgroundColor: 'transparent',
+  },
+  cancelButton: {
+    flex: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: '#000000',
+    borderRadius: 12,
+  },
+  buttonContent: {
+    paddingVertical: 6,
+  },
+  // Button loading styles
+  buttonLoadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonSpinner: {
+    marginRight: 8,
+  },
+  buttonLoadingText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
 
 export default EditScreen;

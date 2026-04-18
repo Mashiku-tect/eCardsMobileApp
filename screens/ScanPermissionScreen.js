@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
-  SafeAreaView,
   StatusBar,
   Platform,
-  Alert,
   RefreshControl,
   FlatList,
-  ToastAndroid
+  ToastAndroid,
+  StyleSheet,
+  View,
+  KeyboardAvoidingView
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import {
   Text,
@@ -24,7 +26,8 @@ import {
   Badge,
   Dialog,
   Portal,
-  Paragraph
+  Paragraph,
+  HelperText
 } from 'react-native-paper';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -45,9 +48,10 @@ const ScanPermissionsScreen = () => {
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [updating, setUpdating] = useState(false);
   const [removeDialogVisible, setRemoveDialogVisible] = useState(false);
   const [itemToRemove, setItemToRemove] = useState(null);
+  const [removingId, setRemovingId] = useState(null);
+  const [addingId, setAddingId] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -69,11 +73,34 @@ const ScanPermissionsScreen = () => {
       await fetchAllUsers();
       
     } catch (error) {
-      console.error('Error fetching data:', error);
-      Toast.show({
-        type: 'error',
-        text1: 'Failed to load data'
-      });
+     // console.error('Error fetching data:', error);
+     let errorMessage = 'Failed to load Event Details. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to Load Event Details. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -93,7 +120,34 @@ const ScanPermissionsScreen = () => {
       });
       setScanners(response.data.scanners || []);
     } catch (error) {
-      console.error('Error fetching scan permissions:', error);
+     // console.error('Error fetching scan permissions:', error);
+      let errorMessage = 'Failed to Fetch Scann Permission. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to Fetch Scan Permmision. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
     }
   };
 
@@ -107,7 +161,34 @@ const ScanPermissionsScreen = () => {
       setAllUsers(response.data.users || []);
       setFilteredUsers(response.data.users || []);
     } catch (error) {
-      console.error('Error fetching users:', error);
+     // console.error('Error fetching users:', error);
+      let errorMessage = 'Failed to fetch users. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to fetch users. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
     } finally {
       setLoadingUsers(false);
     }
@@ -115,17 +196,24 @@ const ScanPermissionsScreen = () => {
 
   // Filter users based on search term
   useEffect(() => {
-    if (searchTerm.trim() === '') {
-      setFilteredUsers(allUsers);
-    } else {
-      const filtered = allUsers.filter(user =>
-        user.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredUsers(filtered);
-    }
-  }, [searchTerm, allUsers]);
+  const safeSearch = (searchTerm ?? "").trim();
+  const safeUsers = Array.isArray(allUsers) ? allUsers : [];
+
+  if (safeSearch === "") {
+    setFilteredUsers(safeUsers);
+  } else {
+    const lowerSearch = safeSearch.toLowerCase();
+
+    const filtered = safeUsers.filter(user =>
+      user?.firstName?.toLowerCase()?.includes(lowerSearch) ||
+      user?.lastName?.toLowerCase()?.includes(lowerSearch) ||
+      user?.email?.toLowerCase()?.includes(lowerSearch)
+    );
+
+    setFilteredUsers(filtered);
+  }
+}, [searchTerm, allUsers]);
+
 
   // Check if user is already a scanner
   const isUserScanner = (userId) => {
@@ -139,7 +227,7 @@ const ScanPermissionsScreen = () => {
 
   const addScanner = async (userId) => {
     try {
-      setUpdating(true);
+      setAddingId(userId);
       const token = await AsyncStorage.getItem('authToken');
       const response = await api.post(
         `${config.BASE_URL}/api/events/${eventId}/scan-permissions`, 
@@ -147,34 +235,48 @@ const ScanPermissionsScreen = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      const responsemessage=response?.data?.message || 'Scanner Added Successfully';
-      if(Platform.OS==='android'){
-        ToastAndroid.show(responsemessage,ToastAndroid.SHORT);
-      }
-      else{
-Toast.show({
+      const responsemessage = response?.data?.message || 'Scanner Added Successfully';
+      if(Platform.OS === 'android'){
+        ToastAndroid.show(responsemessage, ToastAndroid.SHORT);
+      } else {
+        Toast.show({
           type: 'success',
           text1: response.data.message
         });
       }
-        
-      
       
       await fetchScanPermissions();
     } catch (error) {
-      const errormessage = error.response?.data?.message || 'Failed to add scanner';
-      if(Platform.OS==='android'){
-        ToastAndroid.show(errormessage,ToastAndroid.SHORT);
-      }
-      else{
- Toast.show({
-        type: 'error',
-        text1: errormessage || 'Failed to add scanner'
-      });
-      }
-     
+     // const errormessage = error.response?.data?.message || 'Failed to add scanner';
+      let errorMessage = 'Failed to add scanner. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to add scanner.Please Try Again';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
     } finally {
-      setUpdating(false);
+      setAddingId(null);
     }
   };
 
@@ -187,41 +289,55 @@ Toast.show({
     if (!itemToRemove) return;
 
     try {
-      setUpdating(true);
+      setRemovingId(itemToRemove);
       const token = await AsyncStorage.getItem('authToken');
       const response = await api.delete(
         `${config.BASE_URL}/api/events/${eventId}/scan-permissions/${itemToRemove}`, 
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      const responsemessage=response?.data?.message || 'Scanner Removed Successfully';
-      if(Platform.OS==='android'){
-        ToastAndroid.show(responsemessage,ToastAndroid.SHORT);
-      }
-      else{
-      
+      const responsemessage = response?.data?.message || 'Scanner Removed Successfully';
+      if(Platform.OS === 'android'){
+        ToastAndroid.show(responsemessage, ToastAndroid.SHORT);
+      } else {
         Toast.show({
           type: 'success',
           text1: response.data.message
         });
-      
-    }
+      }
       
       await fetchScanPermissions();
     } catch (error) {
-      const errormessage = error.response?.data?.message || 'Failed to remove scanner';
-      if(Platform.OS==='android'){
-        ToastAndroid.show(errormessage,ToastAndroid.SHORT)
-      }
-      else{
- Toast.show({
-        type: 'error',
-        text1: errormessage || 'Failed to remove scanner'
-      });
-      }
-     
+      //const errormessage = error.response?.data?.message || 'Failed to remove scanner';
+        let errorMessage = 'Failed to remove Scanner. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to remove scanner';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
     } finally {
-      setUpdating(false);
+      setRemovingId(null);
       setRemoveDialogVisible(false);
       setItemToRemove(null);
     }
@@ -256,111 +372,161 @@ Toast.show({
     return event.active ? 'Upcoming' : 'Completed';
   };
 
-  const renderScannerItem = ({ item }) => (
-    <Card style={styles.scannerCard} mode="outlined">
-      <Card.Content style={styles.scannerContent}>
-        <Surface style={styles.userInfo} elevation={0}>
-          <Avatar.Text 
-            size={40}
-            label={getUserInitials(item.tenant)}
-            style={styles.avatar}
-            labelStyle={styles.avatarText}
-          />
-          <Surface style={styles.userDetails} elevation={0}>
-            <Text variant="bodyLarge" style={styles.userName}>
-              {item.tenant?.firstName} {item.tenant?.lastName}
-            </Text>
-            <Text variant="bodyMedium" style={styles.userEmail}>
-              {item.tenant?.email}
-            </Text>
-          </Surface>
-        </Surface>
-        <Button
-          mode="outlined"
-          onPress={() => confirmRemoveScanner(item.id)}
-          disabled={updating}
-          style={styles.removeButton}
-          textColor="#DC2626"
-          icon="trash-can-outline"
-          compact
-        >
-          Remove
-        </Button>
-      </Card.Content>
-    </Card>
-  );
-
-  const renderUserItem = ({ item }) => {
-    const isScanner = isUserScanner(item.id);
-    const permissionId = getScannerPermissionId(item.id);
+  const renderScannerItem = ({ item }) => {
+    const isRemoving = removingId === item.id;
     
     return (
-      <Card style={styles.userCard} mode="outlined">
-        <Card.Content style={styles.userContent}>
+      <Card style={styles.scannerCard} mode="outlined">
+        <Card.Content style={styles.scannerContent}>
           <Surface style={styles.userInfo} elevation={0}>
             <Avatar.Text 
               size={40}
-              label={getUserInitials(item)}
+             label={getUserInitials?.(item?.tenant ?? {}) ?? "?"}
+
               style={styles.avatar}
               labelStyle={styles.avatarText}
             />
             <Surface style={styles.userDetails} elevation={0}>
               <Text variant="bodyLarge" style={styles.userName}>
-                {item.firstName} {item.lastName}
+                {item?.tenant?.firstName ?? 'eCards'} {item?.tenant?.lastName?? 'User'}
               </Text>
               <Text variant="bodyMedium" style={styles.userEmail}>
-                {item.email}
+                {item?.tenant?.email ?? 'ecardsuser@mashikutech.co.tz'}
               </Text>
-              <Chip
-                mode="outlined"
-                compact
-                style={styles.roleChip}
-                textStyle={styles.roleText}
-              >
-                {item.role ? item.role.charAt(0).toUpperCase() + item.role.slice(1) : 'User'}
-              </Chip>
             </Surface>
           </Surface>
-          
-          {isScanner ? (
-            <Button
-              mode="outlined"
-              onPress={() => confirmRemoveScanner(permissionId)}
-              disabled={updating}
-              style={styles.removeButton}
-              textColor="#DC2626"
-              icon="trash-can-outline"
-              compact
-            >
-              Remove
-            </Button>
-          ) : (
-            <Button
-              mode="contained"
-              onPress={() => addScanner(item.id)}
-              loading={updating}
-              style={styles.addButton}
-              icon="account-plus"
-              compact
-            >
-              Add Scanner
-            </Button>
-          )}
+          <Button
+            mode="outlined"
+            onPress={() => confirmRemoveScanner(item.id)}
+            disabled={isRemoving}
+            style={styles.removeButton}
+            textColor="#DC2626"
+            icon={isRemoving ? "" : "trash-can-outline"}
+            contentStyle={styles.buttonContent}
+            compact
+          >
+            {isRemoving ? (
+              <View style={styles.buttonLoadingContent}>
+                <ActivityIndicator size="small" color="#DC2626" style={styles.buttonSpinner} />
+                <Text style={styles.buttonLoadingText}>Removing...</Text>
+              </View>
+            ) : (
+              'Remove'
+            )}
+          </Button>
         </Card.Content>
       </Card>
     );
   };
 
+ const renderUserItem = ({ item }) => {
+  const safeItem = item ?? {};
+
+  const userId = safeItem.id ?? null;
+  const permissionId = userId ? getScannerPermissionId?.(userId) : null;
+
+  const isScanner = userId ? isUserScanner?.(userId) : false;
+  const isAdding = userId ? addingId === userId : false;
+  const isRemoving = permissionId ? removingId === permissionId : false;
+
+  return (
+    <Card style={styles.userCard} mode="outlined">
+      <Card.Content style={styles.userContent}>
+        <Surface style={styles.userInfo} elevation={0}>
+          <Avatar.Text
+            size={40}
+            label={getUserInitials?.(safeItem) ?? "?"}
+            style={styles.avatar}
+            labelStyle={styles.avatarText}
+          />
+
+          <Surface style={styles.userDetails} elevation={0}>
+            <Text variant="bodyLarge" style={styles.userName}>
+              {(safeItem.firstName ?? "User") + " " + (safeItem.lastName ?? "")}
+            </Text>
+
+            <Text variant="bodyMedium" style={styles.userEmail}>
+              {safeItem.email ?? "No email"}
+            </Text>
+
+            <Chip
+              mode="outlined"
+              compact
+              style={styles.roleChip}
+              textStyle={styles.roleText}
+            >
+              {safeItem.role
+                ? safeItem.role.charAt(0).toUpperCase() +
+                  safeItem.role.slice(1)
+                : "User"}
+            </Chip>
+          </Surface>
+        </Surface>
+
+        {isScanner ? (
+          <Button
+            mode="outlined"
+            onPress={() => permissionId && confirmRemoveScanner?.(permissionId)}
+            disabled={!permissionId || isRemoving}
+            style={styles.removeButton}
+            textColor="#DC2626"
+            icon={isRemoving ? "" : "trash-can-outline"}
+            contentStyle={styles.buttonContent}
+            compact
+          >
+            {isRemoving ? (
+              <View style={styles.buttonLoadingContent}>
+                <ActivityIndicator
+                  size="small"
+                  color="#DC2626"
+                  style={styles.buttonSpinner}
+                />
+                <Text style={styles.buttonLoadingText}>Removing...</Text>
+              </View>
+            ) : (
+              "Remove"
+            )}
+          </Button>
+        ) : (
+          <Button
+            mode="contained"
+            onPress={() => userId && addScanner?.(userId)}
+            disabled={!userId || isAdding}
+            style={styles.addButton}
+            icon={isAdding ? "" : "account-plus"}
+            contentStyle={styles.buttonContent}
+            compact
+          >
+            {isAdding ? (
+              <View style={styles.buttonLoadingContent}>
+                <ActivityIndicator
+                  size="small"
+                  color="#ffffff"
+                  style={styles.buttonSpinner}
+                />
+                <Text style={styles.buttonLoadingText}>Adding...</Text>
+              </View>
+            ) : (
+              "Add Scanner"
+            )}
+          </Button>
+        )}
+      </Card.Content>
+    </Card>
+  );
+};
+
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
         <StatusBar 
           barStyle="dark-content" 
-          backgroundColor="#f8f9fa"
+          backgroundColor="#ffffff"
           translucent={false}
         />
         <Surface style={styles.loadingContainer} elevation={0}>
-          <ActivityIndicator size="small" />
+          <ActivityIndicator size="small" color="#333333" />
           <Text variant="bodyLarge" style={styles.loadingText}>
             Loading scan permissions...
           </Text>
@@ -371,10 +537,10 @@ Toast.show({
 
   if (!event) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
         <StatusBar 
           barStyle="dark-content" 
-          backgroundColor="#f8f9fa"
+          backgroundColor="#ffffff"
           translucent={false}
         />
         <Surface style={styles.errorContainer} elevation={0}>
@@ -384,7 +550,8 @@ Toast.show({
           <Button
             mode="contained"
             onPress={() => navigation.goBack()}
-            style={styles.backButton}
+            style={styles.primaryButton}
+            contentStyle={styles.buttonContent}
           >
             Back to Events
           </Button>
@@ -396,16 +563,19 @@ Toast.show({
   const statusChipProps = getStatusChipProps();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
       <StatusBar 
         barStyle="dark-content" 
-        backgroundColor="#f8f9fa"
+        backgroundColor="#ffffff"
         translucent={false}
       />
       
       {/* Remove Scanner Dialog */}
       <Portal>
-        <Dialog visible={removeDialogVisible} onDismiss={() => setRemoveDialogVisible(false)}>
+        <Dialog 
+          visible={removeDialogVisible} 
+          onDismiss={() => setRemoveDialogVisible(false)}
+        >
           <Dialog.Title>Remove Scanner</Dialog.Title>
           <Dialog.Content>
             <Paragraph>
@@ -419,89 +589,106 @@ Toast.show({
             <Button 
               onPress={removeScanner}
               mode="contained"
-              loading={updating}
+              disabled={removingId !== null}
               style={styles.dialogRemoveButton}
+              icon={removingId !== null ? "" : "trash-can-outline"}
+              contentStyle={styles.buttonContent}
             >
-              Remove
+              {removingId !== null ? (
+                <View style={styles.buttonLoadingContent}>
+                  <ActivityIndicator size="small" color="#ffffff" style={styles.buttonSpinner} />
+                  <Text style={styles.buttonLoadingText}>Removing...</Text>
+                </View>
+              ) : (
+                'Remove'
+              )}
             </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
 
-      <ScrollView 
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
       >
-        {/* Header */}
-        <Card style={styles.headerCard} mode="contained">
-          <Card.Content style={styles.headerContent}>
-            <Surface style={styles.navigationRow} elevation={0}>
-              <Button
-                mode="outlined"
-                icon="arrow-left"
-                onPress={() => navigation.goBack()}
-                style={styles.navButton}
-                compact
-              >
-                Back to Event
-              </Button>
-            </Surface>
-            <Text variant="headlineMedium" style={styles.title}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <Surface style={styles.header} elevation={0}>
+            <IconButton
+              icon="arrow-left"
+              size={24}
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            />
+            <Text variant="headlineSmall" style={styles.title}>
               Manage Scan Permissions
             </Text>
-          </Card.Content>
-        </Card>
+          </Surface>
 
-        {/* Event Info Card */}
-        <Card style={styles.eventCard} mode="contained">
-          <Card.Content>
-            <Surface style={styles.eventHeader} elevation={0}>
-              <Surface style={styles.eventInfo} elevation={0}>
-                <Text variant="titleLarge" style={styles.eventName}>
-                  {event.eventName}
-                </Text>
-                <Text variant="bodyMedium" style={styles.eventDetails}>
-                  {formatDate(event.eventDate)} at {event.eventTime}
-                </Text>
-                <Text variant="bodyMedium" style={styles.eventLocation}>
-                  {event.location}
-                </Text>
-              </Surface>
-              <Chip
-                mode="outlined"
-                {...statusChipProps}
-              >
-                {getStatusText()}
-              </Chip>
-            </Surface>
-          </Card.Content>
-        </Card>
-
-        <Surface style={styles.content} elevation={0}>
-          {/* Current Scanners Section */}
-          <Card style={styles.sectionCard} mode="contained">
+          {/* Event Info Card */}
+          <Card style={styles.formContainer} mode="contained">
             <Card.Content>
+              <Surface style={styles.eventHeader} elevation={0}>
+                <Surface style={styles.eventInfo} elevation={0}>
+                  <Text variant="titleLarge" style={styles.eventName}>
+                    {event?.eventName ?? 'Uknown Event'}
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.eventDetails}>
+                    {event?.eventDate
+  ? formatDate?.(event.eventDate) ?? "No date"
+  : "No date"
+} at {event?.eventTime ?? '-'}
+                  </Text>
+                  <Text variant="bodyMedium" style={styles.eventLocation}>
+                    {event?.location ?? 'Not Specified'}
+                  </Text>
+                </Surface>
+                <Chip
+                  mode="outlined"
+                  {...statusChipProps}
+                >
+                  {getStatusText()}
+                </Chip>
+              </Surface>
+            </Card.Content>
+          </Card>
+
+          {/* Current Scanners Section */}
+          <Card style={styles.formContainer} mode="contained">
+            <Card.Content style={styles.cardContent}>
               <Text variant="titleLarge" style={styles.sectionTitle}>
                 Current Scanners
               </Text>
               <Text variant="bodyMedium" style={styles.sectionSubtitle}>
-                Users who have permission to scan tickets for this event
+                Users who have permission to scan cards for this event
               </Text>
               
-              {scanners.length > 0 ? (
+              {scanners?.length > 0 ? (
                 <FlatList
-                  data={scanners}
-                  keyExtractor={(item) => item.id.toString()}
-                  renderItem={renderScannerItem}
-                  scrollEnabled={false}
-                  style={styles.list}
-                />
+  data={Array.isArray(scanners) ? scanners : []}
+  keyExtractor={(item, index) =>
+    item?.id != null ? String(item.id) : index.toString()
+  }
+  renderItem={(props) => renderScannerItem?.(props)}
+  scrollEnabled={false}
+  style={styles.list}
+/>
+
               ) : (
                 <Surface style={styles.emptyState} elevation={0}>
-                  <IconButton icon="account-group" size={48} iconColor="#9CA3AF" />
+                  <IconButton 
+                    icon="account-group" 
+                    size={48} 
+                    iconColor="#9CA3AF"
+                    style={styles.emptyIcon}
+                  />
                   <Text variant="bodyLarge" style={styles.emptyTitle}>
                     No scanners assigned yet
                   </Text>
@@ -514,13 +701,13 @@ Toast.show({
           </Card>
 
           {/* Add Scanners Section */}
-          <Card style={styles.sectionCard} mode="contained">
-            <Card.Content>
+          <Card style={styles.formContainer} mode="contained">
+            <Card.Content style={styles.cardContent}>
               <Text variant="titleLarge" style={styles.sectionTitle}>
                 Add Scanners
               </Text>
               <Text variant="bodyMedium" style={styles.sectionSubtitle}>
-                Search and add users who can scan tickets for this event
+                Search and add users who can scan cards for this event
               </Text>
 
               {/* Search Bar */}
@@ -530,29 +717,38 @@ Toast.show({
                   value={searchTerm}
                   onChangeText={setSearchTerm}
                   style={styles.searchBar}
-                  iconColor="#9CA3AF"
+                  iconColor="#666666"
+                  mode="outlined"
                 />
               </Surface>
 
               {/* Users List */}
               {loadingUsers ? (
                 <Surface style={styles.loadingUsers} elevation={0}>
-                  <ActivityIndicator size="small" />
+                  <ActivityIndicator size="small" color="#333333" />
                   <Text variant="bodyMedium" style={styles.loadingUsersText}>
                     Loading users...
                   </Text>
                 </Surface>
               ) : filteredUsers.length > 0 ? (
                 <FlatList
-                  data={filteredUsers}
-                  keyExtractor={(item) => item.id.toString()}
-                  renderItem={renderUserItem}
-                  scrollEnabled={false}
-                  style={styles.list}
-                />
+  data={Array.isArray(filteredUsers) ? filteredUsers : []}
+  keyExtractor={(item, index) =>
+    item?.id != null ? String(item.id) : index.toString()
+  }
+  renderItem={(props) => renderUserItem?.(props)}
+  scrollEnabled={false}
+  style={styles.list}
+/>
+
               ) : (
                 <Surface style={styles.emptyState} elevation={0}>
-                  <IconButton icon="magnify" size={48} iconColor="#9CA3AF" />
+                  <IconButton 
+                    icon="magnify" 
+                    size={48} 
+                    iconColor="#9CA3AF"
+                    style={styles.emptyIcon}
+                  />
                   <Text variant="bodyLarge" style={styles.emptyTitle}>
                     {searchTerm ? 'No users found' : 'No users available'}
                   </Text>
@@ -563,65 +759,73 @@ Toast.show({
               )}
             </Card.Content>
           </Card>
-        </Surface>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
-const styles = {
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#ffffff',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#ffffff',
   },
   loadingText: {
     marginTop: 16,
+    color: '#333333',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#ffffff',
   },
   errorTitle: {
     marginBottom: 16,
     textAlign: 'center',
+    color: '#333333',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 0,
+    backgroundColor: '#ffffff',
   },
   backButton: {
-    backgroundColor: '#3B82F6',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  headerCard: {
-    margin: 16,
-    marginBottom: 8,
-  },
-  headerContent: {
-    paddingVertical: 12,
-  },
-  navigationRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginBottom: 16,
-    backgroundColor: 'transparent',
-  },
-  navButton: {
-    backgroundColor: '#FFFFFF',
+    marginRight: 8,
   },
   title: {
-    textAlign: 'center',
+    color: '#333333',
     fontWeight: 'bold',
   },
-  eventCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
+  formContainer: {
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
+    marginBottom: 20,
+  },
+  cardContent: {
+    paddingVertical: 20,
   },
   eventHeader: {
     flexDirection: 'row',
@@ -636,41 +840,36 @@ const styles = {
   eventName: {
     fontWeight: 'bold',
     marginBottom: 8,
+    color: '#333333',
   },
   eventDetails: {
-    color: '#6B7280',
+    color: '#666666',
     marginBottom: 4,
   },
   eventLocation: {
-    color: '#6B7280',
+    color: '#666666',
   },
   // Status Chip Styles
   activeChip: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: '#f5f5f5',
+    borderColor: '#333333',
   },
   activeChipText: {
-    color: '#065F46',
+    color: '#333333',
   },
   inactiveChip: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#f5f5f5',
   },
   inactiveChipText: {
-    color: '#374151',
-  },
-  content: {
-    padding: 16,
-    gap: 20,
-    backgroundColor: 'transparent',
-  },
-  sectionCard: {
-    marginBottom: 16,
+    color: '#666666',
   },
   sectionTitle: {
     fontWeight: 'bold',
     marginBottom: 8,
+    color: '#333333',
   },
   sectionSubtitle: {
-    color: '#6B7280',
+    color: '#666666',
     marginBottom: 20,
     lineHeight: 20,
   },
@@ -680,16 +879,18 @@ const styles = {
   },
   searchBar: {
     elevation: 0,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#ffffff',
   },
   list: {
     marginTop: 8,
   },
   scannerCard: {
     marginBottom: 12,
+    borderRadius: 12,
   },
   userCard: {
     marginBottom: 12,
+    borderRadius: 12,
   },
   scannerContent: {
     flexDirection: 'row',
@@ -708,11 +909,11 @@ const styles = {
     backgroundColor: 'transparent',
   },
   avatar: {
-    backgroundColor: '#DBEAFE',
+    backgroundColor: '#f5f5f5',
     marginRight: 12,
   },
   avatarText: {
-    color: '#1E40AF',
+    color: '#333333',
   },
   userDetails: {
     flex: 1,
@@ -721,24 +922,29 @@ const styles = {
   userName: {
     fontWeight: 'bold',
     marginBottom: 2,
+    color: '#333333',
   },
   userEmail: {
-    color: '#6B7280',
+    color: '#666666',
     marginBottom: 2,
   },
   roleChip: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#f5f5f5',
     alignSelf: 'flex-start',
     height: 30,
+    borderColor: '#e0e0e0',
   },
   roleText: {
     fontSize: 10,
+    color: '#666666',
   },
   addButton: {
-    backgroundColor: 'green',
+    backgroundColor: '#000000',
+    borderRadius: 8,
   },
   removeButton: {
-    borderColor: '#FECACA',
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
   },
   emptyState: {
     alignItems: 'center',
@@ -746,15 +952,18 @@ const styles = {
     paddingHorizontal: 20,
     backgroundColor: 'transparent',
   },
+  emptyIcon: {
+    backgroundColor: '#f5f5f5',
+  },
   emptyTitle: {
-    color: '#6B7280',
+    color: '#666666',
     marginTop: 16,
     marginBottom: 8,
     textAlign: 'center',
     fontWeight: '600',
   },
   emptySubtitle: {
-    color: '#9CA3AF',
+    color: '#666666',
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -762,16 +971,38 @@ const styles = {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
+    paddingVertical: 40,
     gap: 8,
     backgroundColor: 'transparent',
   },
   loadingUsersText: {
-    color: '#6B7280',
+    color: '#666666',
+  },
+  primaryButton: {
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 2,
+    backgroundColor: '#000000',
+  },
+  buttonContent: {
+    paddingVertical: 6,
+  },
+  // Button loading styles
+  buttonLoadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonSpinner: {
+    marginRight: 8,
+  },
+  buttonLoadingText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   dialogRemoveButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#000000',
   },
-};
+});
 
 export default ScanPermissionsScreen;

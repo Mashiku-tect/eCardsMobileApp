@@ -4,9 +4,12 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
-  StatusBar
+  StatusBar,
+  Dimensions,
+  Platform,
+  ToastAndroid
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Text,
   Card,
@@ -28,6 +31,10 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import config from './config';
 import api from '../utils/api';
+import Toast from 'react-native-toast-message';
+
+const { width: screenWidth } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 375; // iPhone X width threshold
 
 const UserPermissions = () => {
   const navigation = useNavigation();
@@ -88,13 +95,45 @@ const UserPermissions = () => {
         setUserPermissions(userPermissionIds);
         setAllPermissions(defaultPermissions);
         setHasAccess(true);
-        
-      } catch (error) {
-        if (error.response && error.response.status === 403) {
-          setHasAccess(false);
-        }
-        Alert.alert('Error', 'Failed to load user data');
-      } finally {
+      }
+      // } catch (error) {
+      //   if (error.response && error.response.status === 403) {
+      //     setHasAccess(false);
+      //   }
+      //   Alert.alert('Error', 'Failed to load user data');
+      // }
+      catch (error) {
+        setHasAccess(false);
+  let errorMessage = 'Failed to fetch User Information. Please try again.';
+
+  if (error.response) {
+    
+
+    errorMessage =error.response?.data?.message || 'Failed to Load User Data';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
+}
+
+      finally {
         setLoading(false);
       }
     };
@@ -143,21 +182,64 @@ const UserPermissions = () => {
   const handleSavePermissions = async () => {
     setSaving(true);
     try {
-      await AsyncStorage.removeItem("authToken");
+      //await AsyncStorage.removeItem("authToken");
       const token = await AsyncStorage.getItem('authToken');
       
-      await api.put(`${config.BASE_URL}/api/users/${userId}/permissions`, 
+   const response=   await api.put(`${config.BASE_URL}/api/users/${userId}/permissions`, 
         { permissions: userPermissions },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      Alert.alert('Success', 'Permissions updated successfully!');
+      //Alert.alert('Success', 'Permissions updated successfully!');
+      const responsemessage=response.data?.message || 'Permissions updated successfully!';
+      if(Platform.OS==='android'){
+        ToastAndroid.show(responsemessage,ToastAndroid.LONG)
+      }
+      else{
+        Toast.show({
+          type:'success',
+          text1:'Success',
+          text2:responsemessage
+        })
+      }
       navigation.goBack();
-    } catch (error) {
-      const errorMessage = error.response?.data?.message || error.message;
-      const errorDetails = error.response?.data?.details || '';
-      Alert.alert('Error', `Failed to update permissions: ${errorMessage} ${errorDetails}`);
-    } finally {
+    }
+    // } catch (error) {
+    //   const errorMessage = error.response?.data?.message || error.message;
+    //   const errorDetails = error.response?.data?.details || '';
+    //   Alert.alert('Error', `Failed to update permissions: ${errorMessage} ${errorDetails}`);
+    // } 
+    catch (error) {
+  let errorMessage = 'Failed to update permissions';
+
+  if (error.response) {
+ 
+
+    errorMessage =error.response?.data?.message || 'Failed to update permissions';
+     
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
+}
+
+    finally {
       setSaving(false);
     }
   };
@@ -186,12 +268,12 @@ const UserPermissions = () => {
 
   if (loading || hasAccess === null) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-        <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#6200ee" />
-          <Text style={{ marginTop: 16 }}>Loading user permissions...</Text>
-        </View>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        <Surface style={styles.loadingContainer} elevation={0}>
+          <ActivityIndicator size="small" color="#000000" />
+          <Text variant="bodyLarge" style={styles.loadingText}>Loading user permissions...</Text>
+        </Surface>
       </SafeAreaView>
     );
   }
@@ -203,188 +285,217 @@ const UserPermissions = () => {
   const permissionGroups = groupPermissionsByCategory();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
       
       {/* Header */}
-      <Surface style={{ elevation: 2 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
-          <IconButton
-            icon="arrow-left"
-            onPress={() => navigation.goBack()}
-          />
-          <View style={{ flex: 1 }}>
-            <Title>Manage Permissions</Title>
-            <Text style={{ color: '#666' }}>
-              {user?.firstname} {user?.lastname}
-            </Text>
-            <Text style={{ color: '#666', fontSize: 12 }}>{user?.email}</Text>
-          </View>
-        </View>
+      <Surface style={styles.header} elevation={0}>
+        <Surface style={styles.headerContent} elevation={0}>
+          <Text variant="headlineMedium" style={styles.headerTitle}>Manage Permissions</Text>
+          <Text variant="bodyMedium" style={styles.headerSubtitle}>
+            {user?.firstname?? 'eCards'} {user?.lastname?? 'User'}
+          </Text>
+          <Text variant="bodySmall" style={styles.headerEmail}>{user?.email?? 'ecardsuser@mashikutech.co.tz'}</Text>
+        </Surface>
       </Surface>
 
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* User Summary */}
-        <Card style={{ marginBottom: 16 }}>
+        <Card style={styles.userSummaryCard} mode="contained">
           <Card.Content>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+            <Surface style={styles.userSummary} elevation={0}>
               <Avatar.Image 
                 size={48} 
                 source={require('../assets/user.png')}
-                style={{ marginRight: 12 }}
+                style={styles.userAvatar}
               />
-              <View style={{ flex: 1 }}>
-                <Text variant="bodyLarge" style={{ fontWeight: 'bold' }}>
-                  {user?.firstname} {user?.lastname}
+              <Surface style={styles.userInfo} elevation={0}>
+                <Text variant="bodyLarge" style={styles.userName}>
+                  {user?.firstname?? 'eCards'} {user?.lastname ?? 'User'}
                 </Text>
-                <Text variant="bodySmall" style={{ color: '#666' }}>
-                  {userPermissions.length} of {allPermissions.length} permissions granted
+                <Text variant="bodySmall" style={styles.userStats}>
+                  {userPermissions.length || 0} of {allPermissions.length || 0} permissions granted
                 </Text>
-              </View>
-            </View>
+              </Surface>
+            </Surface>
           </Card.Content>
         </Card>
 
         {/* Permission Categories */}
-        <Card style={{ marginBottom: 16 }}>
-          <Card.Content>
-            <Title style={{ marginBottom: 16 }}>Permission Categories</Title>
-            <View style={{ gap: 8 }}>
-              {Object.keys(permissionGroups).map((category) => (
-                <Surface 
-                  key={category} 
-                  style={{ 
-                    borderRadius: 8, 
-                    padding: 12,
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    elevation: 1
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Avatar.Icon 
-                      size={40} 
-                      icon={category === 'user' ? 'account-group' : category === 'event' ? 'calendar' : 'shield-check'}
-                      style={{ backgroundColor: '#e0e0e0', marginRight: 12 }}
-                    />
-                    <View>
-                      <Text style={{ fontWeight: 'bold', textTransform: 'capitalize' }}>
-                        {category} Permissions
-                      </Text>
-                      <Text style={{ fontSize: 12, color: '#666' }}>
-                        {permissionGroups[category].length} permissions available
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontWeight: 'bold' }}>
-                      {getCategoryStats(category)}
-                    </Text>
-                    <Button
-                      mode="text"
-                      onPress={() => handleSelectAll(category)}
-                      compact
-                      style={{ marginTop: 4 }}
-                    >
-                      {permissionGroups[category].every(p => userPermissions.includes(p.id)) 
-                        ? 'Deselect All' 
-                        : 'Select All'
-                      }
-                    </Button>
-                  </View>
+       <Card style={styles.categoriesCard} mode="contained">
+  <Card.Content>
+    <Text variant="titleLarge" style={styles.sectionTitle}>
+      Permission Categories
+    </Text>
+
+    <Surface style={styles.categoriesContainer} elevation={0}>
+      {permissionGroups && typeof permissionGroups === 'object' && Object.keys(permissionGroups).length > 0 ? (
+        Object.keys(permissionGroups).map((category) => {
+          const permissions = Array.isArray(permissionGroups[category])
+            ? permissionGroups[category]
+            : [];
+
+          const allSelected =
+            Array.isArray(userPermissions) &&
+            permissions.every((p) => p?.id && userPermissions.includes(p.id));
+
+          return (
+            <Surface
+              key={category}
+              style={[
+                styles.categoryItem,
+                isSmallScreen && styles.categoryItemSmall,
+              ]}
+              elevation={1}
+            >
+              <Surface style={styles.categoryInfo} elevation={0}>
+                <Avatar.Icon
+                  size={isSmallScreen ? 36 : 40}
+                  icon={
+                    category === 'user'
+                      ? 'account-group'
+                      : category === 'event'
+                      ? 'calendar'
+                      : 'shield-check'
+                  }
+                  style={styles.categoryIcon}
+                  iconColor="#666666"
+                />
+                <Surface style={styles.categoryText} elevation={0}>
+                  <Text style={styles.categoryName} numberOfLines={1}>
+                    {category || 'Unknown'} Permissions
+                  </Text>
+                  <Text style={styles.categoryCount}>
+                    {permissions.length} permissions
+                  </Text>
                 </Surface>
-              ))}
-            </View>
-          </Card.Content>
-        </Card>
+              </Surface>
+              <Surface style={styles.categoryActions} elevation={0}>
+                <Text style={styles.categoryStats}>
+                  {getCategoryStats ? getCategoryStats(category) : ''}
+                </Text>
+                <Button
+                  mode="text"
+                  onPress={() =>
+                    typeof handleSelectAll === 'function' &&
+                    handleSelectAll(category)
+                  }
+                  compact
+                  style={styles.selectAllButton}
+                  textColor="#333333"
+                >
+                  {allSelected ? 'Deselect All' : 'Select All'}
+                </Button>
+              </Surface>
+            </Surface>
+          );
+        })
+      ) : (
+        <Text>No permission categories found</Text>
+      )}
+    </Surface>
+  </Card.Content>
+</Card>
+
 
         {/* Permissions List */}
-        <Card>
-          <Card.Content>
-            <Title style={{ marginBottom: 16 }}>All Permissions</Title>
-            <View style={{ gap: 12 }}>
-              {allPermissions.map((permission) => {
-                const isSelected = isPermissionSelected(permission.id);
-                return (
-                  <Surface 
-                    key={permission.id}
-                    style={{ 
-                      borderRadius: 8, 
-                      padding: 16,
-                      elevation: 1,
-                      backgroundColor: isSelected ? '#e8f5e8' : '#ffffff'
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>
-                          {permission.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </Text>
-                        <Text style={{ color: '#666', fontSize: 12 }}>
-                          {permission.description}
-                        </Text>
-                      </View>
-                      <Switch
-                        value={isSelected}
-                        onValueChange={() => handlePermissionToggle(permission.id)}
-                      />
-                    </View>
-                  </Surface>
-                );
-              })}
-            </View>
-          </Card.Content>
-        </Card>
+        <Card style={styles.permissionsCard} mode="contained">
+  <Card.Content>
+    <Text variant="titleLarge" style={styles.sectionTitle}>
+      All Permissions
+    </Text>
+
+    <Surface style={styles.permissionsContainer} elevation={0}>
+      {Array.isArray(allPermissions) && allPermissions.length > 0 ? (
+        allPermissions.map((permission, index) => {
+          if (!permission || !permission.id) return null; // skip invalid items
+
+          const id = permission.id;
+          const name = permission.name
+            ? permission.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+            : 'Unnamed Permission';
+          const description = permission.description || '';
+
+          const isSelected =
+            typeof isPermissionSelected === 'function'
+              ? isPermissionSelected(id)
+              : false;
+
+          const handleToggle =
+            typeof handlePermissionToggle === 'function'
+              ? () => handlePermissionToggle(id)
+              : undefined;
+
+          return (
+            <Surface
+              key={id.toString() || index.toString()} // always provide a string key
+              style={[
+                styles.permissionItem,
+                isSelected
+                  ? styles.selectedPermission
+                  : styles.unselectedPermission,
+              ]}
+              elevation={1}
+            >
+              <Surface style={styles.permissionContent} elevation={0}>
+                <Surface style={styles.permissionText} elevation={0}>
+                  <Text style={styles.permissionName} numberOfLines={1}>
+                    {name}
+                  </Text>
+                  <Text style={styles.permissionDescription} numberOfLines={2}>
+                    {description}
+                  </Text>
+                </Surface>
+                <Switch
+                  value={isSelected}
+                  onValueChange={handleToggle}
+                  color="#000000"
+                />
+              </Surface>
+            </Surface>
+          );
+        })
+      ) : (
+        <Text>No permissions available</Text>
+      )}
+    </Surface>
+  </Card.Content>
+</Card>
+
 
         {/* Summary */}
-        <Surface style={{ borderRadius: 8, padding: 16, marginTop: 16, elevation: 2 }}>
-          <Text style={{ fontWeight: 'bold', marginBottom: 12 }}>Summary</Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Text>Total Permissions:</Text>
-            <Text style={{ fontWeight: 'bold' }}>{allPermissions.length}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Text>Granted Permissions:</Text>
-            <Text style={{ fontWeight: 'bold', color: '#4caf50' }}>{userPermissions.length}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text>Denied Permissions:</Text>
-            <Text style={{ fontWeight: 'bold', color: '#f44336' }}>
-              {allPermissions.length - userPermissions.length}
+        <Surface style={styles.summaryCard} elevation={1}>
+          <Text style={styles.summaryTitle}>Summary</Text>
+          <Surface style={styles.summaryRow} elevation={0}>
+            <Text style={styles.summaryLabel}>Total Permissions:</Text>
+            <Text style={styles.summaryValue}>{allPermissions.length || 0}</Text>
+          </Surface>
+          <Divider style={styles.summaryDivider} />
+          <Surface style={styles.summaryRow} elevation={0}>
+            <Text style={styles.summaryLabel}>Granted Permissions:</Text>
+            <Text style={[styles.summaryValue, styles.grantedValue]}>{userPermissions.length || 0}</Text>
+          </Surface>
+          <Divider style={styles.summaryDivider} />
+          <Surface style={styles.summaryRow} elevation={0}>
+            <Text style={styles.summaryLabel}>Denied Permissions:</Text>
+            <Text style={[styles.summaryValue, styles.deniedValue]}>
+              {(allPermissions.length || 0) - (userPermissions.length || 0)}
             </Text>
-          </View>
+          </Surface>
         </Surface>
 
-        {/* Action Buttons */}
-        <View style={{ flexDirection: 'row', gap: 12, marginTop: 24, marginBottom: 32 }}>
-          <Button
-            mode="outlined"
-            onPress={() => navigation.goBack()}
-            style={{ flex: 1 }}
-            icon="close"
-          >
-            Cancel
-          </Button>
-          <Button
-            mode="contained"
-            onPress={handleSavePermissions}
-            loading={saving}
-            disabled={saving}
-            style={{ flex: 1 }}
-            icon="check"
-          >
-            {saving ? 'Saving...' : 'Save Permissions'}
-          </Button>
-        </View>
-
         {/* Quick Actions */}
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 32 }}>
+        <Surface style={styles.quickActions} elevation={0}>
           <Button
             mode="text"
             onPress={() => setUserPermissions([])}
             icon="close-circle"
             compact
+            textColor="#666666"
+            style={styles.quickActionButton}
           >
             Clear All
           </Button>
@@ -393,13 +504,276 @@ const UserPermissions = () => {
             onPress={() => setUserPermissions(allPermissions.map(p => p.id))}
             icon="check-circle"
             compact
+            textColor="#666666"
+            style={styles.quickActionButton}
           >
             Select All
           </Button>
-        </View>
+        </Surface>
+
+        {/* Action Buttons */}
+        <Surface style={styles.actionButtons} elevation={0}>
+          <Button
+            mode="outlined"
+            onPress={() => navigation.goBack()}
+            style={styles.cancelButton}
+            icon="close"
+            textColor="#333333"
+          >
+            Cancel
+          </Button>
+          <Button
+            mode="contained"
+            onPress={handleSavePermissions}
+            loading={saving}
+            disabled={saving}
+            style={styles.saveButton}
+            icon="check"
+          >
+            {saving ? 'Saving...' : 'Save Permissions'}
+          </Button>
+        </Surface>
       </ScrollView>
     </SafeAreaView>
   );
+};
+
+const styles = {
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#666666',
+  },
+  header: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  headerContent: {
+    backgroundColor: 'transparent',
+  },
+  headerTitle: {
+    color: '#000000',
+    fontWeight: 'bold',
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    color: '#666666',
+    fontSize: 16,
+  },
+  headerEmail: {
+    color: '#888888',
+    fontSize: 14,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  userSummaryCard: {
+    marginBottom: 20,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
+  },
+  userSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  userAvatar: {
+    marginRight: 12,
+  },
+  userInfo: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  userName: {
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 2,
+  },
+  userStats: {
+    color: '#666666',
+  },
+  categoriesCard: {
+    marginBottom: 20,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
+  },
+  sectionTitle: {
+    color: '#000000',
+    fontWeight: '600',
+    marginBottom: 16,
+    fontSize: 20,
+  },
+  categoriesContainer: {
+    gap: 12,
+    backgroundColor: 'transparent',
+  },
+  categoryItem: {
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  categoryItemSmall: {
+    padding: 12,
+  },
+  categoryInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  categoryIcon: {
+    backgroundColor: '#f5f5f5',
+    marginRight: 12,
+  },
+  categoryText: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  categoryName: {
+    fontWeight: 'bold',
+    textTransform: 'capitalize',
+    color: '#000000',
+    fontSize: 15,
+  },
+  categoryCount: {
+    fontSize: 12,
+    color: '#666666',
+    marginTop: 2,
+  },
+  categoryActions: {
+    alignItems: 'flex-end',
+    backgroundColor: 'transparent',
+  },
+  categoryStats: {
+    fontWeight: 'bold',
+    color: '#000000',
+    fontSize: 14,
+  },
+  selectAllButton: {
+    marginTop: 4,
+  },
+  permissionsCard: {
+    marginBottom: 20,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
+  },
+  permissionsContainer: {
+    gap: 12,
+    backgroundColor: 'transparent',
+  },
+  permissionItem: {
+    borderRadius: 12,
+    padding: 16,
+    backgroundColor: '#ffffff',
+  },
+  selectedPermission: {
+    backgroundColor: '#f9f9f9',
+  },
+  unselectedPermission: {
+    backgroundColor: '#ffffff',
+  },
+  permissionContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  permissionText: {
+    flex: 1,
+    marginRight: 12,
+    backgroundColor: 'transparent',
+  },
+  permissionName: {
+    fontWeight: 'bold',
+    marginBottom: 4,
+    color: '#000000',
+    fontSize: 15,
+  },
+  permissionDescription: {
+    color: '#666666',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  summaryCard: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    backgroundColor: '#f9f9f9',
+  },
+  summaryTitle: {
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#000000',
+    fontSize: 18,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    backgroundColor: 'transparent',
+  },
+  summaryDivider: {
+    backgroundColor: '#f0f0f0',
+    marginBottom: 12,
+  },
+  summaryLabel: {
+    color: '#666666',
+  },
+  summaryValue: {
+    fontWeight: 'bold',
+    color: '#000000',
+  },
+  grantedValue: {
+    color: '#666666',
+  },
+  deniedValue: {
+    color: '#666666',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginBottom: 24,
+    backgroundColor: 'transparent',
+  },
+  quickActionButton: {
+    marginHorizontal: 0,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: 'transparent',
+  },
+  cancelButton: {
+    flex: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: '#000000',
+    borderRadius: 12,
+  },
 };
 
 export default UserPermissions;

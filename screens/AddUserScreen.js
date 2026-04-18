@@ -8,9 +8,10 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   ActivityIndicator,
-  SafeAreaView,
-  StatusBar
+  StatusBar,
+  StyleSheet
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Text,
   TextInput,
@@ -43,33 +44,52 @@ const EnhancedRegistrationScreen = () => {
   const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
 
+  // Validation functions
+  const validateName = (name) => {
+    return /^[A-Za-z]+(?:[ ][A-Za-z]+)*$/.test(name.trim());
+  };
+
+  const validateEmail = (email) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email.trim());
+  };
+
+  const validatePhone = (phone) => {
+    const cleaned = phone.replace(/\D/g, '');
+    return /^(06|07)\d{8}$/.test(cleaned);
+  };
+
   const validateForm = () => {
     const newErrors = {};
 
     if (!formData.firstName.trim()) {
       newErrors.firstName = 'First name is required';
+    } else if (!validateName(formData.firstName)) {
+      newErrors.firstName = 'First name can only contain letters and spaces';
     }
 
     if (!formData.lastName.trim()) {
       newErrors.lastName = 'Last name is required';
+    } else if (!validateName(formData.lastName)) {
+      newErrors.lastName = 'Last name can only contain letters and spaces';
     }
 
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
     }
 
     if (!formData.phoneNumber.trim()) {
       newErrors.phoneNumber = 'Phone number is required';
-    } else if (!/^\d{10,15}$/.test(formData.phoneNumber.replace(/\D/g, ''))) {
-      newErrors.phoneNumber = 'Phone number is invalid';
+    } else if (!validatePhone(formData.phoneNumber)) {
+      newErrors.phoneNumber = 'Phone must be in format: 06XXXXXXXX or 07XXXXXXXX';
     }
 
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Password must be at least 6 characters';
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
     }
 
     setErrors(newErrors);
@@ -81,7 +101,6 @@ const EnhancedRegistrationScreen = () => {
       ...prev,
       [field]: value
     }));
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({
         ...prev,
@@ -91,16 +110,17 @@ const EnhancedRegistrationScreen = () => {
   };
 
   const formatPhoneNumber = (text) => {
-    // Remove all non-digits
     const cleaned = text.replace(/\D/g, '');
+    const limited = cleaned.slice(0, 10);
     
-    // Format based on length
-    if (cleaned.length <= 3) {
-      return cleaned;
-    } else if (cleaned.length <= 6) {
-      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3)}`;
+    if (limited.length <= 2) {
+      return limited;
+    } else if (limited.length <= 5) {
+      return `${limited.slice(0, 2)} ${limited.slice(2)}`;
+    } else if (limited.length <= 8) {
+      return `${limited.slice(0, 2)} ${limited.slice(2, 5)} ${limited.slice(5)}`;
     } else {
-      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+      return `${limited.slice(0, 2)} ${limited.slice(2, 5)} ${limited.slice(5, 8)} ${limited.slice(8)}`;
     }
   };
 
@@ -109,12 +129,20 @@ const EnhancedRegistrationScreen = () => {
     handleInputChange('phoneNumber', formatted);
   };
 
+  const handleNameChange = (field, text) => {
+    const filtered = text.replace(/[^A-Za-z ]/g, '');
+    handleInputChange(field, filtered);
+  };
+
   const handleSubmit = async () => {
     if (!validateForm()) return;
+    
+    // Dismiss keyboard before showing loading
+    Keyboard.dismiss();
+    
     setIsSubmitting(true);
 
     try {
-     // await AsyncStorage.removeItem("authToken");
       const token = await AsyncStorage.getItem("authToken");
 
       const payload = {
@@ -156,62 +184,83 @@ const EnhancedRegistrationScreen = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f5f5f5" />
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      
+      {/* Loading Overlay */}
+      {isSubmitting && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator 
+              animating={true} 
+              size="large" 
+              color="#ffffff"
+              style={styles.spinner}
+            />
+            <Text style={styles.loadingTitle}>Creating User Account</Text>
+            <Text style={styles.loadingSubtitle}>Please wait while we process your request...</Text>
+          </View>
+        </View>
+      )}
       
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <KeyboardAvoidingView 
-          style={{ flex: 1 }}
+          style={styles.keyboardAvoidingView}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <ScrollView 
-            contentContainerStyle={{ flexGrow: 1, padding: 16, justifyContent: 'center' }}
+            contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            <Card style={{ marginBottom: 24 }}>
+            <Card style={styles.formCard} mode="contained">
               <Card.Content>
                 {/* Header */}
-                <View style={{ alignItems: 'center', marginBottom: 32 }}>
+                <Surface style={styles.headerContainer} elevation={0}>
                   <Avatar.Icon 
                     size={64} 
                     icon="account-plus" 
-                    style={{ backgroundColor: '#6200ee', marginBottom: 16 }}
+                    style={styles.headerIcon}
+                    iconColor="#ffffff"
                   />
-                  <Title style={{ textAlign: 'center' }}>Create User Account</Title>
-                  <Text style={{ textAlign: 'center', color: '#666', marginTop: 8 }}>
+                  <Title style={styles.headerTitle}>Add New User</Title>
+                  <Text style={styles.headerSubtitle}>
                     Add a new user to the system
                   </Text>
-                </View>
+                </Surface>
 
-                <Divider style={{ marginBottom: 24 }} />
+                <Divider style={styles.divider} />
 
                 {/* Form Fields */}
-                <View style={{ flexDirection: 'row', marginBottom: 16 }}>
+                <Surface style={styles.nameRow} elevation={0}>
                   <TextInput
                     label="First Name *"
                     mode="outlined"
                     value={formData.firstName}
-                    onChangeText={(text) => handleInputChange('firstName', text)}
-                    style={{ flex: 1, marginRight: 8 }}
+                    onChangeText={(text) => handleNameChange('firstName', text)}
+                    style={styles.firstNameInput}
                     error={!!errors.firstName}
                     autoCapitalize="words"
                     returnKeyType="next"
+                    maxLength={30}
+                    disabled={isSubmitting}
                   />
                   <TextInput
                     label="Last Name *"
                     mode="outlined"
                     value={formData.lastName}
-                    onChangeText={(text) => handleInputChange('lastName', text)}
-                    style={{ flex: 1 }}
+                    onChangeText={(text) => handleNameChange('lastName', text)}
+                    style={styles.lastNameInput}
                     error={!!errors.lastName}
                     autoCapitalize="words"
                     returnKeyType="next"
+                    maxLength={30}
+                    disabled={isSubmitting}
                   />
-                </View>
+                </Surface>
 
-                {errors.firstName && <HelperText type="error" visible>{errors.firstName}</HelperText>}
-                {errors.lastName && <HelperText type="error" visible>{errors.lastName}</HelperText>}
+                {errors.firstName && <HelperText type="error" visible style={styles.errorText}>{errors.firstName}</HelperText>}
+                {errors.lastName && <HelperText type="error" visible style={styles.errorText}>{errors.lastName}</HelperText>}
 
                 <TextInput
                   label="Email *"
@@ -221,11 +270,12 @@ const EnhancedRegistrationScreen = () => {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoComplete="email"
-                  style={{ marginBottom: 8 }}
+                  style={styles.input}
                   error={!!errors.email}
                   returnKeyType="next"
+                  disabled={isSubmitting}
                 />
-                {errors.email && <HelperText type="error" visible>{errors.email}</HelperText>}
+                {errors.email && <HelperText type="error" visible style={styles.errorText}>{errors.email}</HelperText>}
 
                 <TextInput
                   label="Phone Number *"
@@ -234,11 +284,17 @@ const EnhancedRegistrationScreen = () => {
                   onChangeText={handlePhoneChange}
                   keyboardType="phone-pad"
                   maxLength={14}
-                  style={{ marginBottom: 8 }}
+                  style={styles.input}
                   error={!!errors.phoneNumber}
                   returnKeyType="next"
+                  placeholder="06 123 456 78"
+                  disabled={isSubmitting}
                 />
-                {errors.phoneNumber && <HelperText type="error" visible>{errors.phoneNumber}</HelperText>}
+                {errors.phoneNumber && (
+                  <HelperText type="error" visible style={styles.errorText}>
+                    {errors.phoneNumber}
+                  </HelperText>
+                )}
 
                 <TextInput
                   label="Password *"
@@ -247,17 +303,20 @@ const EnhancedRegistrationScreen = () => {
                   onChangeText={(text) => handleInputChange('password', text)}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
-                  style={{ marginBottom: 8 }}
+                  style={styles.input}
                   error={!!errors.password}
                   right={
                     <TextInput.Icon 
                       icon={showPassword ? "eye-off" : "eye"}
                       onPress={() => setShowPassword(!showPassword)}
+                      color="#666666"
+                      disabled={isSubmitting}
                     />
                   }
                   returnKeyType="done"
+                  disabled={isSubmitting}
                 />
-                {errors.password && <HelperText type="error" visible>{errors.password}</HelperText>}
+                {errors.password && <HelperText type="error" visible style={styles.errorText}>{errors.password}</HelperText>}
 
                 <Button
                   mode="contained"
@@ -265,34 +324,41 @@ const EnhancedRegistrationScreen = () => {
                   loading={isSubmitting}
                   disabled={isSubmitting}
                   icon="account-plus"
-                  style={{ marginTop: 24 }}
+                  style={styles.submitButton}
+                  contentStyle={styles.submitButtonContent}
                 >
                   {isSubmitting ? 'Creating...' : 'Create User Account'}
                 </Button>
 
                 {/* Password Requirements */}
-                <Surface style={{ borderRadius: 8, padding: 16, marginTop: 24, elevation: 1 }}>
-                  <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>Password Requirements:</Text>
-                  <Text style={{ color: '#666', fontSize: 12 }}>• At least 6 characters long</Text>
-                  <Text style={{ color: '#666', fontSize: 12 }}>• Use a combination of letters and numbers</Text>
-                  <Text style={{ color: '#666', fontSize: 12 }}>• Avoid common passwords</Text>
+                <Surface style={styles.requirementsCard} elevation={1}>
+                  <Text style={styles.requirementsTitle}>Password Requirements:</Text>
+                  <Text style={styles.requirementsText}>• At least 8 characters long</Text>
+                  <Text style={styles.requirementsText}>• Use a combination of letters and numbers</Text>
+                  <Text style={styles.requirementsText}>• Avoid common passwords</Text>
                 </Surface>
               </Card.Content>
             </Card>
 
             {/* Form Instructions */}
-            <Surface style={{ borderRadius: 8, padding: 16, elevation: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                <IconButton icon="information" size={20} />
-                <Text style={{ fontWeight: 'bold', marginLeft: 8 }}>Important Notes:</Text>
-              </View>
-              <Text style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
+            <Surface style={styles.instructionsCard} elevation={1}>
+              <Surface style={styles.instructionsHeader} elevation={0}>
+                <IconButton icon="information" size={20} iconColor="#666666" disabled={isSubmitting} />
+                <Text style={styles.instructionsTitle}>Important Notes:</Text>
+              </Surface>
+              <Text style={styles.instructionsText}>
                 • All fields marked with * are required
               </Text>
-              <Text style={{ color: '#666', fontSize: 12, marginBottom: 4 }}>
+              <Text style={styles.instructionsText}>
+                • Names can only contain letters and spaces
+              </Text>
+              <Text style={styles.instructionsText}>
+                • Phone must start with 06 or 07 and be 10 digits
+              </Text>
+              <Text style={styles.instructionsText}>
                 • Phone number will be automatically formatted
               </Text>
-              <Text style={{ color: '#666', fontSize: 12 }}>
+              <Text style={styles.instructionsText}>
                 • User will receive login credentials via email
               </Text>
             </Surface>
@@ -302,5 +368,159 @@ const EnhancedRegistrationScreen = () => {
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 20,
+    justifyContent: 'center',
+  },
+  formCard: {
+    marginBottom: 24,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
+  },
+  headerContainer: {
+    alignItems: 'center',
+    marginBottom: 24,
+    backgroundColor: 'transparent',
+  },
+  headerIcon: {
+    backgroundColor: '#000000',
+    marginBottom: 16,
+  },
+  headerTitle: {
+    textAlign: 'center',
+    color: '#000000',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    textAlign: 'center',
+    color: '#666666',
+    fontSize: 16,
+  },
+  divider: {
+    backgroundColor: '#f0f0f0',
+    marginBottom: 24,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    backgroundColor: 'transparent',
+    gap: 12,
+  },
+  firstNameInput: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  lastNameInput: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  input: {
+    marginBottom: 8,
+    backgroundColor: '#ffffff',
+  },
+  errorText: {
+    marginBottom: 8,
+  },
+  submitButton: {
+    marginTop: 24,
+    borderRadius: 12,
+    backgroundColor: '#000000',
+  },
+  submitButtonContent: {
+    paddingVertical: 6,
+  },
+  requirementsCard: {
+    borderRadius: 12,
+    padding: 20,
+    marginTop: 24,
+    backgroundColor: '#f9f9f9',
+  },
+  requirementsTitle: {
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#000000',
+    fontSize: 16,
+  },
+  requirementsText: {
+    color: '#666666',
+    fontSize: 14,
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  instructionsCard: {
+    borderRadius: 12,
+    padding: 20,
+    backgroundColor: '#f9f9f9',
+  },
+  instructionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    backgroundColor: 'transparent',
+  },
+  instructionsTitle: {
+    fontWeight: 'bold',
+    color: '#000000',
+    fontSize: 16,
+  },
+  instructionsText: {
+    color: '#666666',
+    fontSize: 14,
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  // Loading overlay styles
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999, // Very high z-index to ensure it's on top
+  },
+  loadingContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 280,
+    minHeight: 280,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  spinner: {
+    marginBottom: 24,
+  },
+  loadingTitle: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  loadingSubtitle: {
+    color: '#e0e0e0',
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+});
 
 export default EnhancedRegistrationScreen;

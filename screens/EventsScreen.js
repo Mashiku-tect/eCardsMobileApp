@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { 
   FlatList, 
   RefreshControl,
-  SafeAreaView,
   StatusBar,
   Platform,
   Image
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import {
   Text,
@@ -34,28 +34,51 @@ const EventsScreen = () => {
 
   // Array of random event images from Unsplash
   const randomEventImages = [
-    "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2069&q=80",
-    "https://images.unsplash.com/photo-1531058020387-3be344556be6?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
-    "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
     "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
     "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
     "https://images.unsplash.com/photo-1511578314322-379afb476865?ixlib=rb-4.0.3&auto=format&fit=crop&w=2069&q=80",
     "https://images.unsplash.com/photo-1540575467063-178a50c2df87?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
     "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?ixlib=rb-4.0.3&auto=format&fit=crop&w=2012&q=80",
     "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?ixlib=rb-4.0.3&auto=format&fit=crop&w=2098&q=80",
-    "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80"
+    "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    // New images added below
+    "https://images.unsplash.com/photo-1547592180-85f173990554?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?ixlib=rb-4.0.3&auto=format&fit=crop&w=2069&q=80",
+    "https://images.unsplash.com/photo-1501386761578-eac5c94b800a?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1541535645162-428c40b7c4b4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2069&q=80",
+    "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?ixlib=rb-4.0.3&auto=format&fit=crop&w=2071&q=80",
+    "https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?ixlib=rb-4.0.3&auto=format&fit=crop&w=2069&q=80",
+    "https://images.unsplash.com/photo-1492684223066-dd23140edf6d?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1511578314322-379afb476865?ixlib=rb-4.0.3&auto=format&fit=crop&w=2069&q=80",
+    "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1519677100203-5f5a1c56b7b3?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1567942712661-82b9b407abbf?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+    "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?ixlib=rb-4.0.3&auto=format&fit=crop&w=2012&q=80"
   ];
 
   // Function to get random image for each event
-  const getRandomEventImage = (eventId) => {
-    // Use event ID to get consistent but different image for each event
-    const index = (eventId?.toString().length || 0) % randomEventImages.length;
-    return randomEventImages[index];
-  };
+  // const getRandomEventImage = (eventId) => {
+  //   const index = (eventId?.toString().length || 0) % randomEventImages.length;
+  //   return randomEventImages[index];
+  // };
 
-  useEffect(() => {
-    fetchEvents();
-  }, []);
+  const getRandomEventImage = () => {
+  const index = Math.floor(Math.random() * randomEventImages.length);
+  return randomEventImages[index];
+};
+
+
+  // useEffect(() => {
+  //   fetchEvents();
+  // }, []);
 
   const fetchEvents = async () => {
     try {
@@ -77,7 +100,7 @@ const EventsScreen = () => {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          timeout: 10000,
+          
         }
       );
 
@@ -87,22 +110,37 @@ const EventsScreen = () => {
         setError(response.data.message || 'Failed to fetch events');
       }
     } catch (error) {
-      console.error('Error fetching events:', error);
+      //console.error('Error fetching events:', error);
       
       let errorMessage = 'Failed to fetch events';
-      if (error.response) {
-        if (error.response.status === 401) {
-          errorMessage = 'Session expired. Please login again.';
-          await AsyncStorage.removeItem('userToken');
-          navigation.navigate('Login');
-        } else {
-          errorMessage = error.response.data?.message || `Server error: ${error.response.status}`;
-        }
-      } else if (error.request) {
-        errorMessage = 'No response from server. Please check your connection.';
-      } else {
-        errorMessage = error.message || 'Unknown error occurred';
-      }
+      //let errorMessage = 'Failed to Update First attendee status. Please try again.';
+
+  if (error.response) {
+
+
+    errorMessage =error.response?.data?.message || 'Failed to fetch events. Please try again.';
+    
+
+    
+
+  } else if (error.request) {
+    errorMessage = 'Unable to reach the server. Check your internet connection.';
+  } else if (error.code === 'ECONNABORTED') {
+    errorMessage = 'Request timed out. Please try again.';
+  } else {
+    errorMessage = error.message;
+  }
+
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(errorMessage, ToastAndroid.LONG);
+  } else {
+    Toast.show({
+      type: 'error',
+      text1: 'Error',
+      text2: errorMessage
+    });
+  }
+      
       
       setError(errorMessage);
     } finally {
@@ -127,23 +165,48 @@ const EventsScreen = () => {
   };
 
   const handleEventAction = (action, eventId, eventName) => {
-    switch (action) {
-      case 'details':
-        navigation.navigate("EventDetails", { eventId, eventName });
-        break;
-      case 'scan':
-        navigation.navigate("Scanner", { eventId, eventName });
-        break;
-      case 'logs':
-        navigation.navigate("EventLogs", { eventId, eventName });
-        break;
-      case 'manual-checkin':
-        navigation.navigate("ManualCheckin", { eventId, eventName });
-        break;
-      default:
-        break;
-    }
-  };
+  if (!eventId) {
+    //console.warn("handleEventAction: missing eventId", { action, eventId, eventName });
+    return;
+  }
+
+  const safeEventName = eventName ?? "Event";
+
+  switch (action) {
+    case "details":
+      navigation.navigate("EventDetails", {
+        eventId,
+        eventName: safeEventName,
+      });
+      break;
+
+    case "scan":
+      navigation.navigate("Scanner", {
+        eventId,
+        eventName: safeEventName,
+      });
+      break;
+
+    case "logs":
+      navigation.navigate("EventLogs", {
+        eventId,
+        eventName: safeEventName,
+      });
+      break;
+
+    case "manual-checkin":
+      navigation.navigate("ManualCheckin", {
+        eventId,
+        eventName: safeEventName,
+      });
+      break;
+
+    default:
+      //console.warn("handleEventAction: unknown action", action);
+      break;
+  }
+};
+
 
   const getCategoryIcon = (category) => {
     switch (category?.toLowerCase()) {
@@ -160,31 +223,9 @@ const EventsScreen = () => {
     }
   };
 
-  const getStatusColor = (eventDate) => {
-    const today = new Date();
-    const eventDateObj = new Date(eventDate);
-    
-    if (eventDateObj < today) {
-      return '#EF4444'; // Past event - red
-    } else if (eventDateObj.toDateString() === today.toDateString()) {
-      return '#10B981'; // Today - green
-    } else {
-      return '#3B82F6'; // Future event - blue
-    }
-  };
+  
 
-  const getStatusText = (eventDate) => {
-    const today = new Date();
-    const eventDateObj = new Date(eventDate);
-    
-    if (eventDateObj < today) {
-      return 'Past';
-    } else if (eventDateObj.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else {
-      return 'Upcoming';
-    }
-  };
+  
 
   const renderItem = ({ item }) => (
     <Card style={styles.card} mode="contained">
@@ -198,40 +239,32 @@ const EventsScreen = () => {
           <Text variant="titleLarge" style={styles.title} numberOfLines={2}>
             {item.eventName || 'Untitled Event'}
           </Text>
-          {/* <Chip 
-            mode="outlined" 
-            compact
-            textStyle={styles.statusChipText}
-            style={[styles.statusChip, { borderColor: getStatusColor(item.eventDate) }]}
-          >
-            {getStatusText(item.eventDate)}
-          </Chip> */}
         </Surface>
 
         <Surface style={styles.details} elevation={0}>
           <Surface style={styles.detailItem} elevation={0}>
-            <IconButton icon="calendar" size={16} iconColor="#666" />
+            <IconButton icon="calendar" size={16} iconColor="#666666" />
             <Text variant="bodyMedium" style={styles.detailText}>
               {item.eventDate ? formatDate(item.eventDate) : 'Date not set'}
             </Text>
           </Surface>
           
           <Surface style={styles.detailItem} elevation={0}>
-            <IconButton icon="map-marker" size={16} iconColor="#666" />
+            <IconButton icon="map-marker" size={16} iconColor="#666666" />
             <Text variant="bodyMedium" style={styles.detailText} numberOfLines={1}>
               {item.location || 'Location not specified'}
             </Text>
           </Surface>
           
           <Surface style={styles.detailItem} elevation={0}>
-            <IconButton icon="account-group" size={16} iconColor="#666" />
+            <IconButton icon="account-group" size={16} iconColor="#666666" />
             <Text variant="bodyMedium" style={styles.detailText}>
               {item.totalGuests ? `${item.totalGuests} attendees` : 'No attendees info'}
             </Text>
           </Surface>
           
           <Surface style={styles.detailItem} elevation={0}>
-            <IconButton icon={getCategoryIcon(item.category)} size={16} iconColor="#666" />
+            <IconButton icon={getCategoryIcon(item.category)} size={16} iconColor="#666666" />
             <Text variant="bodyMedium" style={styles.detailText}>
               {item.category ? `${item.category.charAt(0).toUpperCase() + item.category.slice(1)}` : 'No category'}
             </Text>
@@ -292,8 +325,13 @@ const EventsScreen = () => {
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea}>
+        <StatusBar 
+          barStyle="dark-content"
+          backgroundColor="#ffffff"
+          translucent={false}
+        />
         <Surface style={styles.loadingContainer} elevation={0}>
-          <ActivityIndicator size="small" />
+          <ActivityIndicator size="small" color="#000000" />
           <Text variant="bodyLarge" style={styles.loadingText}>
             Loading events...
           </Text>
@@ -306,11 +344,11 @@ const EventsScreen = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar 
         barStyle="dark-content"
-        backgroundColor="#f8f9fa"
+        backgroundColor="#ffffff"
         translucent={false}
       />
       
-      <Surface style={styles.header} elevation={1}>
+      <Surface style={styles.header} elevation={0}>
         <Text variant="headlineMedium" style={styles.headerTitle}>
           My Events
         </Text>
@@ -338,15 +376,15 @@ const EventsScreen = () => {
           <RefreshControl 
             refreshing={refreshing} 
             onRefresh={fetchEvents}
-            colors={['#3B82F6']}
-            tintColor={'#3B82F6'}
+            colors={['#000000']}
+            tintColor={'#000000'}
           />
         }
         ListEmptyComponent={
           <Surface style={styles.emptyState} elevation={0}>
             {error ? (
               <>
-                <IconButton icon="alert-circle" size={64} iconColor="#EF4444" />
+                <IconButton icon="alert-circle" size={64} iconColor="#999999" />
                 <Text variant="titleLarge" style={styles.emptyStateText}>
                   Error Loading Events
                 </Text>
@@ -363,7 +401,7 @@ const EventsScreen = () => {
               </>
             ) : (
               <>
-                <IconButton icon="calendar-blank" size={64} iconColor="#c2c2c2" />
+                <IconButton icon="calendar-blank" size={64} iconColor="#CCCCCC" />
                 <Text variant="titleLarge" style={styles.emptyStateText}>
                   No events yet
                 </Text>
@@ -375,13 +413,6 @@ const EventsScreen = () => {
           </Surface>
         }
       />
-
-      {/* <FAB
-        icon="plus"
-        style={styles.fab}
-        onPress={() => navigation.navigate('Create Events')}
-        label="Create Event"
-      /> */}
     </SafeAreaView>
   );
 };
@@ -399,7 +430,7 @@ const styles = {
   },
   loadingText: {
     marginTop: 12,
-    color: '#6B7280',
+    color: '#666666',
   },
   header: {
     padding: 20,
@@ -408,91 +439,98 @@ const styles = {
     backgroundColor: '#ffffff',
   },
   headerTitle: {
-    color: '#1a1a1a',
+    color: '#000000',
     fontWeight: 'bold',
-    marginBottom: 5,
+    fontSize: 28,
+    marginBottom: 4,
   },
   headerSubtitle: {
-    color: '#666',
-    marginBottom: 15,
+    color: '#666666',
+    marginBottom: 20,
+    fontSize: 16,
   },
   createButton: {
     alignSelf: 'flex-start',
+    borderRadius: 12,
+    backgroundColor: '#000000',
   },
   createButtonContent: {
+    paddingVertical: 6,
     flexDirection: 'row-reverse',
   },
   listContent: {
-    padding: 15,
+    padding: 20,
     paddingTop: 0,
   },
   card: {
     marginBottom: 20,
+    borderRadius: 16,
+    elevation: 2,
+    backgroundColor: '#ffffff',
   },
   cardImage: {
     height: 160,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   cardContent: {
-    paddingTop: 8,
+    paddingTop: 16,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 16,
     backgroundColor: 'transparent',
   },
   title: {
-    color: '#1a1a1a',
+    color: '#000000',
     fontWeight: 'bold',
     flex: 1,
     marginRight: 8,
-  },
-  statusChip: {
-    height: 30,
-  },
-  statusChipText: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 20,
   },
   details: {
-    marginBottom: 12,
+    marginBottom: 16,
     backgroundColor: 'transparent',
   },
   detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
     backgroundColor: 'transparent',
   },
   detailText: {
-    color: '#666',
-    marginLeft: 4,
+    color: '#666666',
+    marginLeft: 8,
     flex: 1,
+    fontSize: 15,
   },
   divider: {
-    marginVertical: 8,
+    marginVertical: 12,
+    backgroundColor: '#F0F0F0',
   },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     backgroundColor: 'transparent',
+    gap: 8,
   },
   actionButton: {
     flex: 1,
-    marginHorizontal: 2,
+    borderRadius: 8,
   },
   viewButton: {
-    backgroundColor: '#4e6bff',
+    backgroundColor: '#333333',
   },
   scanButton: {
-    backgroundColor: '#10b981',
+    backgroundColor: '#555555',
   },
   logsButton: {
-    backgroundColor: '#f59e0b',
+    backgroundColor: '#777777',
   },
   manualCheckinButton: {
-    backgroundColor: '#8b5cf6',
+    backgroundColor: '#999999',
   },
   actionButtonLabel: {
     fontSize: 12,
@@ -502,30 +540,26 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
-    marginTop: 20,
+    marginTop: 40,
     backgroundColor: 'transparent',
   },
   emptyStateText: {
-    color: '#4a4a4a',
-    marginTop: 15,
-    marginBottom: 5,
+    color: '#000000',
+    marginTop: 16,
+    marginBottom: 8,
     textAlign: 'center',
     fontWeight: '600',
+    fontSize: 20,
   },
   emptyStateSubtext: {
-    color: '#8a8d97',
+    color: '#666666',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    fontSize: 16,
   },
   retryButton: {
-    backgroundColor: '#3B82F6',
-  },
-  fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#3B82F6',
+    backgroundColor: '#000000',
+    borderRadius: 12,
   },
 };
 

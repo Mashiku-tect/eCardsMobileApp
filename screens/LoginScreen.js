@@ -4,9 +4,11 @@ import {
   KeyboardAvoidingView, 
   Platform,
   StyleSheet,
-  SafeAreaView,
-  StatusBar
+  StatusBar,
+  ToastAndroid,
+  View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Text,
   TextInput,
@@ -21,6 +23,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import config from './config';
 import { usePermissions } from "../context/PermissionContext";
+
 import api from '../utils/api';
 
 const LoginScreen = ({ navigation, onLogin }) => {
@@ -31,6 +34,7 @@ const LoginScreen = ({ navigation, onLogin }) => {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+    const { refreshPermissions } = usePermissions();
 
   const validateForm = () => {
     const newErrors = {};
@@ -61,60 +65,27 @@ const LoginScreen = ({ navigation, onLogin }) => {
         // 2️⃣ Save token consistently
         await AsyncStorage.setItem("authToken", token);
 
+          await refreshPermissions();
+
         // 3️⃣ Tell parent App that user is logged in
         onLogin(token);
 
-        // 4️⃣ Fetch permissions (WAIT UNTIL DONE)
-        await fetchPermissions();
-
-        // 5️⃣ Get the LATEST permissions from context
-        const updatedPermissions = permissions;
+       
 
         // 6️⃣ Toast success message
         const message = response.data.message;
         if (Platform.OS === "android") {
-          Toast.show({ type: "success", text1: message });
+         ToastAndroid.show(message,ToastAndroid.LONG)
         } else {
           Toast.show({ type: "success", text1: message });
         }
 
-        // 7️⃣ Navigation priority order
-        const priority = [
-          "dashboard_view",
-          "event_add",
-          "event_view",
-          "user_view",
-          "invitation_send",
-        ];
+       
 
-        const screenMap = {
-          dashboard_view: "Dashboard",
-          event_add: "Create Events",
-          event_view: "Events",
-          user_view: "User Management",
-          invitation_send: "Send Invitations",
-        };
-
-        // 8️⃣ Select first screen user is allowed to see
-        const firstAllowed = priority.find((p) => updatedPermissions.includes(p));
-
-        // 9️⃣ Navigate to the allowed screen
-        navigation.reset({
-          index: 0,
-          routes: [
-            {
-              name: "MainApp",
-              params: {
-                screen: "HomeTabs",
-                params: {
-                  screen: screenMap[firstAllowed] ?? "Profile",
-                },
-              },
-            },
-          ],
-        });
+       
       }
     } catch (error) {
+    //  console.log(error)
       const errorMessage = error.response?.data?.message || "Login failed";
       setErrors({ submit: errorMessage });
       Toast.show({ type: "error", text1: errorMessage });
@@ -127,7 +98,7 @@ const LoginScreen = ({ navigation, onLogin }) => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar 
         barStyle="dark-content" 
-        backgroundColor="#f8f9fa"
+        backgroundColor="#ffffff"
         translucent={false}
       />
       <KeyboardAvoidingView 
@@ -158,6 +129,7 @@ const LoginScreen = ({ navigation, onLogin }) => {
                 keyboardType="email-address"
                 error={!!errors.email}
                 left={<TextInput.Icon icon="email" />}
+                disabled={loading}
               />
               <HelperText type="error" visible={!!errors.email}>
                 {errors.email}
@@ -178,8 +150,10 @@ const LoginScreen = ({ navigation, onLogin }) => {
                   <TextInput.Icon 
                     icon={isPasswordVisible ? "eye-off" : "eye"} 
                     onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                    disabled={loading}
                   />
                 }
+                disabled={loading}
               />
               <HelperText type="error" visible={!!errors.password}>
                 {errors.password}
@@ -191,6 +165,7 @@ const LoginScreen = ({ navigation, onLogin }) => {
                 onPress={() => navigation.navigate('ForgotPassword')}
                 style={styles.forgotPassword}
                 compact
+                disabled={loading}
               >
                 Forgot Password?
               </Button>
@@ -201,17 +176,24 @@ const LoginScreen = ({ navigation, onLogin }) => {
               </HelperText>
 
               {/* Login Button */}
-              <Button 
-                mode="contained" 
-                onPress={handleLogin}
-                loading={loading}
-                disabled={loading}
-                style={styles.loginButton}
-                icon="login"
-                contentStyle={styles.buttonContent}
-              >
-                {loading ? 'Signing In...' : 'Sign In'}
-              </Button>
+             {/* Login Button */}
+<Button 
+  mode="contained" 
+  onPress={handleLogin}
+  disabled={loading}
+  style={styles.loginButton}
+  icon={loading ? "" : "login"}
+  contentStyle={styles.buttonContent}
+>
+  {loading ? (
+    <View style={styles.buttonLoadingContent}>
+      <ActivityIndicator size="small" color="#ffffff" style={styles.buttonSpinner} />
+      <Text style={styles.buttonLoadingText}>Signing In...</Text>
+    </View>
+  ) : (
+    'Sign In'
+  )}
+</Button>
             </Card.Content>
           </Card>
 
@@ -232,20 +214,20 @@ export default LoginScreen;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
   container: { 
     flex: 1, 
-    backgroundColor: '#fff' 
+    backgroundColor: '#ffffff' 
   },
   content: { 
     flex: 1, 
     justifyContent: 'center', 
     padding: 30,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
   },
   appName: { 
-    color: '#2c3e50', 
+    color: '#000000', 
     fontSize: 42,
     fontWeight: 'bold',
     textAlign: 'center',
@@ -253,7 +235,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   tagline: { 
-    color: '#7f8c8d', 
+    color: '#666666', 
     textAlign: 'center',
     fontSize: 16,
     marginBottom: 40,
@@ -261,16 +243,18 @@ const styles = StyleSheet.create({
   formContainer: { 
     borderRadius: 16, 
     marginBottom: 20,
-    elevation: 4,
+    elevation: 2,
+    backgroundColor: '#ffffff',
   },
   welcomeText: { 
-    color: '#2c3e50', 
+    color: '#333333', 
     textAlign: 'center', 
     marginBottom: 25,
     fontWeight: '600',
   },
   input: {
     marginBottom: 8,
+    backgroundColor: '#ffffff',
   },
   forgotPassword: { 
     alignSelf: 'flex-end', 
@@ -279,20 +263,36 @@ const styles = StyleSheet.create({
   loginButton: { 
     borderRadius: 12,
     marginTop: 8,
-    elevation: 4,
+    elevation: 2,
+    backgroundColor: '#000000',
   },
   buttonContent: {
     paddingVertical: 6,
   },
+  // Button loading styles
+  buttonLoadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonSpinner: {
+    marginRight: 8,
+  },
+  buttonLoadingText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   footer: {
     alignItems: 'center',
     paddingHorizontal: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     marginTop: 20,
   },
   footerText: {
-    color: '#95a5a6',
+    color: '#888888',
     textAlign: 'center',
     fontStyle: 'italic',
   },
+  // Removed loading overlay styles
 });

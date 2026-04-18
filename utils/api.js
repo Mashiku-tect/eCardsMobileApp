@@ -23,11 +23,11 @@ api.interceptors.response.use(
   response => response,
   async error => {
     if (error.response?.status === 401) {
-        Toast.show({
-    type: 'error',
-    text1: 'Session expired',
-    text2: 'Please login again',
-  });
+  //       Toast.show({
+  //   type: 'error',
+  //   text1: 'Session expired',
+  //   text2: 'Please login again',
+  // });
       await logout();
     }
     return Promise.reject(error);
