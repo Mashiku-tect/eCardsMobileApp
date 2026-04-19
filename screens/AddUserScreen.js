@@ -22,12 +22,8 @@ import {
   Avatar,
   HelperText,
   Surface,
-  Divider,
-  Portal,
-  Dialog,
-  Paragraph
+  Divider
 } from 'react-native-paper';
-import axios from 'axios';
 import config from './config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../utils/api';
@@ -186,23 +182,7 @@ const EnhancedRegistrationScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
-      {/* Loading Overlay */}
-      {isSubmitting && (
-        <View style={styles.loadingOverlay}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator 
-              animating={true} 
-              size="large" 
-              color="#ffffff"
-              style={styles.spinner}
-            />
-            <Text style={styles.loadingTitle}>Creating User Account</Text>
-            <Text style={styles.loadingSubtitle}>Please wait while we process your request...</Text>
-          </View>
-        </View>
-      )}
-      
+
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <KeyboardAvoidingView 
           style={styles.keyboardAvoidingView}
@@ -321,13 +301,19 @@ const EnhancedRegistrationScreen = () => {
                 <Button
                   mode="contained"
                   onPress={handleSubmit}
-                  loading={isSubmitting}
                   disabled={isSubmitting}
-                  icon="account-plus"
+                  icon={isSubmitting ? '' : 'account-plus'}
                   style={styles.submitButton}
                   contentStyle={styles.submitButtonContent}
                 >
-                  {isSubmitting ? 'Creating...' : 'Create User Account'}
+                  {isSubmitting ? (
+                    <View style={styles.buttonLoadingContent}>
+                      <ActivityIndicator size="small" color="#ffffff" style={styles.buttonSpinner} />
+                      <Text style={styles.buttonLoadingText}>Creating...</Text>
+                    </View>
+                  ) : (
+                    'Create User Account'
+                  )}
                 </Button>
 
                 {/* Password Requirements */}
@@ -442,6 +428,19 @@ const styles = StyleSheet.create({
   submitButtonContent: {
     paddingVertical: 6,
   },
+  buttonLoadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonSpinner: {
+    marginRight: 8,
+  },
+  buttonLoadingText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   requirementsCard: {
     borderRadius: 12,
     padding: 20,
@@ -481,45 +480,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 6,
     lineHeight: 20,
-  },
-  // Loading overlay styles
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 9999, // Very high z-index to ensure it's on top
-  },
-  loadingContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    padding: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 280,
-    minHeight: 280,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  spinner: {
-    marginBottom: 24,
-  },
-  loadingTitle: {
-    color: '#ffffff',
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  loadingSubtitle: {
-    color: '#e0e0e0',
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 22,
   },
 });
 
