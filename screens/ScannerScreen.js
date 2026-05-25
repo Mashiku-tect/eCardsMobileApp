@@ -116,35 +116,19 @@ const ScannerScreen = ({ route, navigation }) => {
           `Guest: ${response.data.guestName || 'Unknown'}\nStatus: ${response.data.status || 'Valid'}`,
           [{ text: "OK", onPress: () => setScanned(false) }]
         );
-      } else {
-        Alert.alert(
-          "Validation Failed",
-          response.data.message || "This QR code is not valid for this event.",
-          [{ text: "OK", onPress: () => setScanned(false) }]
-        );
-      }
+      } 
     } catch (error) {
-      console.error('Error validating scan:', error);
+      //console.error('Error validating scan:', error);
       
       let errorMessage = "Failed to validate QR code";
       
       if (error.response) {
-        // Server responded with error
-        errorMessage = error.response?.data?.message || errorMessage;
+       
+          errorMessage = error.response?.data?.message || "Event or QR code not found.";
         
-        // Handle specific error cases
-        if (error.response.status === 401) {
-          errorMessage = "Unauthorized access. Please login again.";
-        } else if (error.response.status === 403) {
-          errorMessage = "You don't have permission to scan this event.";
-        } else if (error.response.status === 404) {
-          errorMessage = "Event or guest not found.";
-        }
       } else if (error.request) {
         errorMessage = "Unable to connect to server. Check your internet connection.";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
+      } 
       
       Alert.alert(
         "Error",
