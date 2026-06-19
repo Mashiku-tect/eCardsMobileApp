@@ -32,6 +32,20 @@ import api from '../utils/api';
 
 const ITEMS_PER_PAGE = 15; // Number of guests to show per page
 
+const getGuestDisplayName = (guest) => {
+  const firstName = guest?.firstName?.trim() || 'eCards';
+  const lastName = guest?.lastName?.trim();
+
+  return lastName ? `${firstName} ${lastName}` : firstName;
+};
+
+const getGuestInitials = (guest) => {
+  const firstInitial = guest?.firstName?.trim()?.[0] || 'G';
+  const lastInitial = guest?.lastName?.trim()?.[0];
+
+  return lastInitial ? `${firstInitial}${lastInitial}` : firstInitial;
+};
+
 const ManualCheckin = () => {
   const navigation = useNavigation();
   const route = useRoute();
@@ -182,8 +196,8 @@ const ManualCheckin = () => {
         return a.checkedIn ? 1 : -1;
       }
       // Then sort by name
-      const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
-      const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+      const nameA = getGuestDisplayName(a).toLowerCase();
+      const nameB = getGuestDisplayName(b).toLowerCase();
       return nameA.localeCompare(nameB);
     });
   };
@@ -241,7 +255,7 @@ const ManualCheckin = () => {
 
       Alert.alert(
         "Success",
-        `${guest.firstName} ${guest.lastName} has been checked in.`,
+        `${getGuestDisplayName(guest)} has been checked in.`,
         [{ text: "OK" }]
       );
     } catch (error) {
@@ -303,7 +317,7 @@ const ManualCheckin = () => {
       setAllGuests(updatedAllGuests);
       Alert.alert(
         'Success',
-        `First attendee checked in for ${guest.firstName} ${guest.lastName}.`,
+        `First attendee checked in for ${getGuestDisplayName(guest)}.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
@@ -366,7 +380,7 @@ const ManualCheckin = () => {
       setAllGuests(updatedAllGuests);
       Alert.alert(
         'Success',
-        `Second attendee checked in for ${guest.firstName} ${guest.lastName}.`,
+        `Second attendee checked in for ${getGuestDisplayName(guest)}.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
@@ -429,7 +443,7 @@ const ManualCheckin = () => {
       setAllGuests(updatedAllGuests);
       Alert.alert(
         'Success',
-        `Both attendees checked in for ${guest.firstName} ${guest.lastName}.`,
+        `Both attendees checked in for ${getGuestDisplayName(guest)}.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
@@ -553,13 +567,13 @@ const ManualCheckin = () => {
           <Surface style={[styles.guestCell, styles.nameCell]} elevation={0}>
             <Avatar.Text 
               size={32}
-              label={`${guest.firstName?.[0] || 'Guest'}${guest.lastName?.[0] || 'User'}`}
+              label={getGuestInitials(guest)}
               style={styles.avatar}
               labelStyle={styles.avatarText}
             />
             <Surface style={styles.nameInfo} elevation={0}>
               <Text variant="bodyLarge" style={styles.guestName}>
-                {guest?.firstName ?? 'eCards'} {guest?.lastName?? 'Guest'}
+                {getGuestDisplayName(guest)}
               </Text>
               <Text variant="bodySmall" style={styles.phoneText}>
                 {guest?.phoneNumber?? '0626779507'}
