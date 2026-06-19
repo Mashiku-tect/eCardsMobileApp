@@ -458,6 +458,7 @@ Toast.show({
       data.append("description", formData.description.trim());
       data.append("category", formData.category);
       data.append("package", formData.package);
+      data.append("event_type","invitation");
       
       data.append("excelFile", {
         uri: formData.excelFile.uri,
