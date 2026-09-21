@@ -70,6 +70,7 @@ const EventDetails = () => {
         }
       });
       setEvent(response.data.event);
+      //console.log("event guests",response.data.guests)
       setGuests(response.data.guests || []);
     } catch (error) {
      // const errormessage = error.response?.data?.message || 'Failed to fetch event details';
@@ -112,7 +113,7 @@ const EventDetails = () => {
     today.setHours(0, 0, 0, 0);
     eventDate.setHours(0, 0, 0, 0);
     
-    return eventDate < today;
+    return Boolean(event.active) && eventDate < today;
   };
 
   const shouldDisableCallStatusButtons = () => {
@@ -237,6 +238,59 @@ const EventDetails = () => {
     );
   };
 
+  const renderInvitationChannel = (channel) => {
+    const normalizedChannel = channel?.toUpperCase();
+
+    if (!normalizedChannel) {
+      return <Text style={styles.noInvitationText}>No invitation</Text>;
+    }
+
+    const isWhatsApp = normalizedChannel === 'WHATSAPP';
+
+    return (
+      <View style={styles.channelContainer}>
+        <IconButton
+          icon={isWhatsApp ? 'whatsapp' : 'message-text'}
+          size={16}
+          iconColor={isWhatsApp ? '#25d366' : '#3b82f6'}
+          style={styles.channelIcon}
+        />
+        <Text style={isWhatsApp ? styles.whatsappText : styles.smsText}>
+          {isWhatsApp ? 'WhatsApp' : 'SMS'}
+        </Text>
+      </View>
+    );
+  };
+
+  const renderInvitationStatus = (status) => {
+    if (!status) {
+      return <Text style={styles.noInvitationText}>No invitation</Text>;
+    }
+
+    const normalizedStatus = status.toUpperCase();
+    const formattedStatus = normalizedStatus
+      .toLowerCase()
+      .replace(/(^|\s)\S/g, letter => letter.toUpperCase());
+
+    return (
+      <Chip
+        mode="outlined"
+        compact
+        style={[
+          styles.messageStatusChip,
+          normalizedStatus === 'FAILED' || normalizedStatus === 'UNDELIVERABLE' || normalizedStatus === 'TIMEOUT'
+            ? styles.messageStatusErrorChip
+            : normalizedStatus === 'DELIVERED' || normalizedStatus === 'READ' || normalizedStatus === 'ACCEPTED'
+              ? styles.messageStatusSuccessChip
+              : styles.messageStatusPendingChip
+        ]}
+        textStyle={styles.messageStatusChipText}
+      >
+        {formattedStatus}
+      </Chip>
+    );
+  };
+
   const getPackageColumns = () => {
     const packageName = event?.packagename || 'Basic';
     const baseColumns = [
@@ -247,20 +301,24 @@ const EventDetails = () => {
       { key: 'phone', label: 'Phone', width: 120 },
       { key: 'type', label: 'Type', width: 80 },
     ];
+    const invitationColumns = [
+      { key: 'invitationChannel', label: 'Channel', width: 120 },
+      { key: 'invitationStatus', label: 'Message Status', width: 130 }
+    ];
 
     switch (packageName.toLowerCase()) {
       case 'basic':
         return [
           ...baseColumns,
           { key: 'rsvpStatus', label: 'RSVP Status', width: 100 },
-          { key: 'invitation', label: 'Invitation', width: 100 }
+          ...invitationColumns
         ];
       
       case 'standard':
         return [
           ...baseColumns,
           { key: 'rsvpStatus', label: 'RSVP Status', width: 100 },
-          { key: 'invitation', label: 'Invitation', width: 100 },
+          ...invitationColumns,
           { key: 'callStatus', label: 'Call Status', width: 150 }
         ];
       
@@ -268,7 +326,7 @@ const EventDetails = () => {
         return [
           ...baseColumns,
           { key: 'rsvpStatus', label: 'RSVP Status', width: 100 },
-          { key: 'invitation', label: 'Invitation', width: 100 },
+          ...invitationColumns,
           { key: 'reminder1', label: 'Reminder 1', width: 100 },
           { key: 'callStatus', label: 'Call Status', width: 150 }
         ];
@@ -277,14 +335,14 @@ const EventDetails = () => {
         return [
           ...baseColumns,
           { key: 'rsvpStatus', label: 'RSVP Status', width: 100 },
-          { key: 'invitation', label: 'Invitation', width: 100 },
+          ...invitationColumns,
           { key: 'reminder1', label: 'Reminder 1', width: 100 },
           { key: 'reminder2', label: 'Reminder 2', width: 100 },
           { key: 'callStatus', label: 'Call Status', width: 150 }
         ];
       
       default:
-        return baseColumns;
+        return [...baseColumns, ...invitationColumns];
     }
   };
 
@@ -840,11 +898,11 @@ Toast.show({
           </Chip>
         );
       
-      case 'invitation':
-        return renderChannelStatus(
-          item.invitationSmsSent || item.smsSent, // fallback to old field
-          item.invitationWhatsappSent
-        );
+      case 'invitationChannel':
+        return renderInvitationChannel(item.channel);
+
+      case 'invitationStatus':
+        return renderInvitationStatus(item.status);
       
       case 'callStatus':
         return renderCallStatusButtons(item);
@@ -1792,6 +1850,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#3b82f6',
     marginLeft: 4,
+    fontWeight: '500',
+  },
+  noInvitationText: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  messageStatusChip: {
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageStatusSuccessChip: {
+    backgroundColor: '#d1fae5',
+    borderColor: '#10b981',
+  },
+  messageStatusPendingChip: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b',
+  },
+  messageStatusErrorChip: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#ef4444',
+  },
+  messageStatusChipText: {
+    fontSize: 11,
     fontWeight: '500',
   },
   // Call Status Styles
